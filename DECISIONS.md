@@ -393,6 +393,32 @@ in statusbar 3A e 3B (giallo).
 iterare sulla geometria — le rev. 2 e 3 di D-026 inseguivano un bug che
 non c'era più.
 
+### D-028 — Metodo per le curve secche (tornanti e chicane)
+**Data**: 2026-07-23 (richiesta esplicita utente: "un metodo per curve
+molto secche"; i muri si incrociavano nei tornanti)
+**Problema geometrico**: sul lato interno le sezioni convergono verso il
+centro di curvatura: a distanza laterale d = R si incontrano tutte, oltre
+si incrociano. Un verge da 8 m dentro un R da 12 è impossibile per
+qualsiasi tool: i tornanti reali RESTRINGONO il verge interno.
+**Decisione (approvata)**:
+1. **Verge interno adattivo**: per ogni anello, l'erba sul lato interno è
+   limitata a (R_locale − 1.5 m − w), minimo 0.5 m (cordolo); variazione
+   rate-limitata (0.5 m per m lungo s) → cuneo progressivo come nei verge
+   reali. Lato interno rilevato PER ANELLO dal segno della curvatura
+   (Menger) → le chicane funzionano (il restringimento salta di lato).
+   Il muro segue il bordo ristretto → niente incroci, mai.
+2. **Densità adattiva**: passo anelli = clamp(minR/12, 1 m, 5 m) —
+   uniforme su tutto il giro (i consumer assumono passo uniforme),
+   maxCount 12000. Via l'effetto "linee spezzate".
+3. **L'asfalto è sacro**: mai ristretto. Se R < w + 1.5 nemmeno l'asfalto
+   ci sta → errore rosso (allargare i bracci o stringere la pista).
+   NOTA su D-024 (mai correzioni): il restringimento NON è una correzione
+   di input utente ma la risoluzione di un'impossibilità geometrica, con
+   regole dichiarate e deterministiche; l'input (larghezza erba nominale)
+   resta intatto e torna appena il raggio lo consente.
+**Costanti**: INNER_MARGIN 1.5 m, MIN_VERGE 0.5 m, VERGE_SLEW 0.5 m/m
+(flowTubeMesh.js). Il footprint 2D (3A) mostra ancora larghezze nominali.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD

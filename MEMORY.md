@@ -186,7 +186,15 @@ http://localhost:5173. **112 test unitari verdi**.
       `bankingRampQuality`: warning giallo (popup curva + statusbar 3A/3B)
       con pendenza effettiva e rampa minima consigliata (25° → ≥89 m).
       121 test verdi. LEZIONE: misurare prima di iterare sulla geometria.
-- [ ] Fase 3B: **validazione utente** in corso (riprovare con rampe ≥89 m).
+- [x] 2026-07-23 — **Metodo curve secche** (D-028, approvato: "impossibile
+      fare chicane e tornanti"): verge interno adattivo al raggio locale
+      (R−1.5−w, min 0.5 m, rate-limit 0.5 m/m; lato interno per-anello dal
+      segno di curvatura → chicane ok); densità anelli adattiva
+      (clamp(minR/12, 1, 5) m, maxCount 12000); asfalto mai toccato (rosso
+      se R < w+1.5). Test: tornante bracci 15 → zero triangoli ribaltati,
+      cerchio R12 → verge 4.5 m esatto, slew rispettato, +11 test (tot
+      **128 verdi**). Live: tornante con 2542 anelli senza errori.
+- [ ] Fase 3B: **validazione utente** in corso (tornante + rampe bank ≥89 m).
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello

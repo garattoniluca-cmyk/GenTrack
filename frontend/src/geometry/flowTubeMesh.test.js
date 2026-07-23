@@ -1,6 +1,16 @@
 // Test invarianti flowTubeMesh.js (qualità da simulatore) — vedi TESTING.md
 import { describe, it, expect } from 'vitest';
-import { buildFlowTubeMesh, minTriangleArea, mergeIndexed, buildRibbon } from './flowTubeMesh.js';
+import {
+  buildFlowTubeMesh,
+  minTriangleArea,
+  mergeIndexed,
+  buildRibbon,
+  signedCurvature,
+  computeVergeWidths,
+  INNER_MARGIN,
+  MIN_VERGE,
+  VERGE_SLEW,
+} from './flowTubeMesh.js';
 import { buildBankingRoll } from './banking.js';
 import { resampleFilletPath } from './spline.js';
 
@@ -205,6 +215,99 @@ describe('buildFlowTubeMesh — banking e quota', () => {
     const leftY = g.positions[iMid * 6 + 1];
     const rightY = g.positions[half + iMid * 6 + 4];
     expect(rightY).toBeGreaterThan(leftY); // esterno (destra) più alto
+  });
+});
+
+describe('curve secche (D-028): verge interno che si restringe', () => {
+  // anello circolare R=12 percorso in senso antiorario (svolta a sinistra
+  // costante → interno a SINISTRA), pista 12 m: il verge da 8 m NON ci sta
+  const R = 12;
+  const NC = 240;
+  const circle = Array.from({ length: NC }, (_, i) => {
+    const a = (i / NC) * 2 * Math.PI;
+    return { x: R * Math.cos(a), y: R * Math.sin(a) };
+  });
+  const circLen = 2 * Math.PI * R;
+
+  it('curvatura firmata: +1/R sul cerchio ccw', () => {
+    const k = signedCurvature(circle);
+    for (let i = 0; i < NC; i += 20) {
+      expect(k[i]).toBeCloseTo(1 / R, 3);
+    }
+  });
+
+  it('il verge INTERNO si restringe al raggio disponibile; l\'esterno resta pieno', () => {
+    const { effL, effR } = computeVergeWidths(circle, SECTION, circLen);
+    const expected = R - INNER_MARGIN - 6; // 4.5 m
+    for (let i = 0; i < NC; i += 20) {
+      expect(effL[i]).toBeCloseTo(expected, 2); // interno (sinistra) ristretto
+      expect(effR[i]).toBe(8); // esterno intatto
+    }
+  });
+
+  it('mai sotto il minimo da cordolo, anche con raggi impossibili', () => {
+    const tiny = Array.from({ length: 120 }, (_, i) => {
+      const a = (i / 120) * 2 * Math.PI;
+      return { x: 5 * Math.cos(a), y: 5 * Math.sin(a) };
+    });
+    const { effL } = computeVergeWidths(tiny, SECTION, 2 * Math.PI * 5);
+    for (const v of effL) expect(v).toBeGreaterThanOrEqual(MIN_VERGE);
+  });
+
+  it('sul rettilineo: larghezze piene (nessun effetto)', () => {
+    const { effL, effR } = computeVergeWidths(path.samples, SECTION, path.totalLength);
+    // il quadrato ha stondature R~grandi: ovunque larghezza piena
+    const minL = Math.min(...effL);
+    const minR = Math.min(...effR);
+    expect(minL).toBe(8);
+    expect(minR).toBe(8);
+  });
+
+  it('rate-limit: la larghezza varia al massimo di VERGE_SLEW per metro', () => {
+    // tornante vero: quadrato con una curva strettissima (bracci 15 m)
+    const hairpinPath = resampleFilletPath(square, 0, 'ccw', { 2: { in: 15, out: 15 } }, 150);
+    const hN = hairpinPath.sampleCount;
+    const ds = hairpinPath.totalLength / hN;
+    const { effL, effR } = computeVergeWidths(hairpinPath.samples, SECTION, hairpinPath.totalLength);
+    for (const arr of [effL, effR]) {
+      for (let i = 0; i < hN; i++) {
+        expect(Math.abs(arr[(i + 1) % hN] - arr[i])).toBeLessThanOrEqual(VERGE_SLEW * ds + 1e-9);
+      }
+    }
+  });
+
+  it('TORNANTE: nessun triangolo ribaltato nell\'erba (niente geometria ripiegata)', () => {
+    const hairpinPath = resampleFilletPath(square, 0, 'ccw', { 2: { in: 15, out: 15 } }, 150);
+    const hN = hairpinPath.sampleCount;
+    const m = buildFlowTubeMesh(
+      hairpinPath.samples,
+      new Array(hN).fill(0),
+      new Array(hN).fill(0),
+      SECTION
+    );
+    const g = m.bands.grass;
+    // ogni faccia dell'erba deve guardare verso l'ALTO (y della normale
+    // geometrica > 0): una zona ripiegata avrebbe facce capovolte
+    let flipped = 0;
+    for (let k = 0; k < g.indices.length; k += 3) {
+      const a = g.indices[k] * 3;
+      const b = g.indices[k + 1] * 3;
+      const c = g.indices[k + 2] * 3;
+      const abx = g.positions[b] - g.positions[a];
+      const abz = g.positions[b + 2] - g.positions[a + 2];
+      const acx = g.positions[c] - g.positions[a];
+      const acz = g.positions[c + 2] - g.positions[a + 2];
+      // componente y del cross (in piano XZ): abz*acx − abx*acz
+      const ny = abz * acx - abx * acz;
+      if (ny < -1e-9) flipped++;
+    }
+    expect(flipped).toBe(0);
+  });
+
+  it('densità adattiva: il tornante infittisce gli anelli', () => {
+    const normal = resampleFilletPath(square, 0, 'ccw', {}, 150);
+    const hairpin = resampleFilletPath(square, 0, 'ccw', { 2: { in: 15, out: 15 } }, 150);
+    expect(hairpin.sampleCount).toBeGreaterThan(normal.sampleCount * 2);
   });
 });
 

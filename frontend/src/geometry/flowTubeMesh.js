@@ -25,6 +25,82 @@
 
 export const WALL_HEIGHT = 2; // m
 
+// ---- Metodo per le CURVE SECCHE (D-028) ----
+// Sul lato INTERNO di una curva le sezioni convergono verso il centro di
+// curvatura: a distanza laterale d = R si incontrano tutte, oltre si
+// incrociano (muri che si intersecano, geometria ripiegata). Un verge da
+// 8 m dentro un raggio da 12 è geometricamente impossibile: come nei
+// tornanti reali, l'ERBA sul lato interno si RESTRINGE al raggio
+// disponibile (fino a un minimo da cordolo), il muro segue il bordo
+// ristretto. L'ASFALTO non viene MAI toccato: se non ci sta nemmeno lui,
+// resta l'errore rosso (si allargano i bracci in Fase 2).
+export const INNER_MARGIN = 1.5; // m di rispetto dal centro di curvatura
+export const MIN_VERGE = 0.5; // larghezza minima erba interna (cordolo)
+export const VERGE_SLEW = 0.5; // max variazione larghezza (m per m lungo s)
+
+/** Curvatura firmata 2D per sample (Menger): >0 = svolta a sinistra. */
+export function signedCurvature(samples) {
+  const n = samples.length;
+  const out = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    const a = samples[(i - 1 + n) % n];
+    const b = samples[i];
+    const c = samples[(i + 1) % n];
+    const abx = b.x - a.x;
+    const aby = b.y - a.y;
+    const bcx = c.x - b.x;
+    const bcy = c.y - b.y;
+    const cross2 = abx * bcy - aby * bcx;
+    const lab = Math.hypot(abx, aby);
+    const lbc = Math.hypot(bcx, bcy);
+    const lac = Math.hypot(c.x - a.x, c.y - a.y);
+    const denom = lab * lbc * lac;
+    out[i] = denom > 1e-12 ? (2 * cross2) / denom : 0;
+  }
+  return out;
+}
+
+/**
+ * Larghezze erba EFFETTIVE per anello: sul lato interno della curva la
+ * larghezza è limitata a (R_locale − margine − w), con minimo MIN_VERGE,
+ * e la variazione lungo s è rate-limitata (VERGE_SLEW) per un cuneo
+ * progressivo come nei verge reali. Ritorna { effL, effR }.
+ */
+export function computeVergeWidths(samples, section, totalLength) {
+  const n = samples.length;
+  const w = section.trackWidth / 2;
+  const kappa = signedCurvature(samples);
+  const effL = new Array(n).fill(section.grassLeft);
+  const effR = new Array(n).fill(section.grassRight);
+  for (let i = 0; i < n; i++) {
+    const k = kappa[i];
+    if (k > 1e-6) {
+      // svolta a sinistra → interno a SINISTRA
+      const avail = 1 / k - INNER_MARGIN - w;
+      effL[i] = Math.min(section.grassLeft, Math.max(MIN_VERGE, avail));
+    } else if (k < -1e-6) {
+      const avail = 1 / -k - INNER_MARGIN - w;
+      effR[i] = Math.min(section.grassRight, Math.max(MIN_VERGE, avail));
+    }
+  }
+  // rate-limit periodico (avanti+indietro, 2 giri per convergere sul wrap)
+  const ds = totalLength / n;
+  const maxStep = VERGE_SLEW * ds;
+  for (const arr of [effL, effR]) {
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i <= n; i++) {
+        const j = i % n;
+        arr[j] = Math.min(arr[j], arr[(i - 1) % n] + maxStep);
+      }
+      for (let i = n - 1; i >= -1; i--) {
+        const j = (i + n) % n;
+        arr[j] = Math.min(arr[j], arr[(i + 1 + n) % n] + maxStep);
+      }
+    }
+  }
+  return { effL, effR };
+}
+
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const cross = (a, b) => [
   a[1] * b[2] - a[2] * b[1],
@@ -115,14 +191,16 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
   }
   const w = section.trackWidth / 2;
   const lw = section.lineWidth;
-  const dGrassL = w + section.grassLeft;
-  const dGrassR = -(w + section.grassRight);
 
   // punti 3D della mezzeria (coordinate three: Y-up)
   const P = new Array(n);
   for (let i = 0; i < n; i++) {
     P[i] = [samples[i].x, z[i], -samples[i].y];
   }
+
+  // curve secche (D-028): larghezze erba effettive per anello
+  const tLen = totalLen(samples);
+  const { effL, effR } = computeVergeWidths(samples, section, tLen);
 
   // rail per fascia (condivisi al bit tra fasce adiacenti)
   const rWallLTop = new Array(n);
@@ -174,12 +252,12 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
       P[i][2] + L[2] * d,
     ];
 
-    rGrassLOut[i] = at(dGrassL);
+    rGrassLOut[i] = at(w + effL[i]);
     rLineLOut[i] = at(w);
     rLineLIn[i] = at(w - lw);
     rLineRIn[i] = at(-(w - lw));
     rLineROut[i] = at(-w);
-    rGrassROut[i] = at(dGrassR);
+    rGrassROut[i] = at(-(w + effR[i]));
     grassLN[i] = U;
     grassRN[i] = U;
     // muri solidali alla sezione: estrusi lungo la normale del piano bankato
@@ -198,20 +276,20 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
   const rightN = leftN.map((l) => [-l[0], -l[1], -l[2]]);
 
   const bands = {
-    asphalt: buildRibbon(rLineLIn, rLineRIn, upN, totalLen(samples)),
+    asphalt: buildRibbon(rLineLIn, rLineRIn, upN, tLen),
     lines: mergeIndexed([
-      buildRibbon(rLineLOut, rLineLIn, upN, totalLen(samples)),
-      buildRibbon(rLineRIn, rLineROut, upN, totalLen(samples)),
+      buildRibbon(rLineLOut, rLineLIn, upN, tLen),
+      buildRibbon(rLineRIn, rLineROut, upN, tLen),
     ]),
     grass: mergeIndexed([
-      buildRibbon(rGrassLOut, rLineLOut, grassLN, totalLen(samples)),
-      buildRibbon(rLineROut, rGrassROut, grassRN, totalLen(samples)),
+      buildRibbon(rGrassLOut, rLineLOut, grassLN, tLen),
+      buildRibbon(rLineROut, rGrassROut, grassRN, tLen),
     ]),
     walls: mergeIndexed([
       // muro SX: faccia interna verso destra (−L) → winding flip
-      buildRibbon(rWallLTop, rGrassLOut, rightN, totalLen(samples), true),
+      buildRibbon(rWallLTop, rGrassLOut, rightN, tLen, true),
       // muro DX: faccia interna verso sinistra (+L)
-      buildRibbon(rWallRTop, rGrassROut, leftN, totalLen(samples), false),
+      buildRibbon(rWallRTop, rGrassROut, leftN, tLen, false),
     ]),
   };
 

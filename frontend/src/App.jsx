@@ -26,7 +26,7 @@ import {
   bankingConflicts,
   bankingRampQuality,
 } from './geometry/banking.js';
-import { buildFlowTubeMesh } from './geometry/flowTubeMesh.js';
+import { buildFlowTubeMesh, INNER_MARGIN } from './geometry/flowTubeMesh.js';
 
 export default function App() {
   const phase = useTrackStore((s) => s.phase);
@@ -161,19 +161,14 @@ export default function App() {
     return buildFlowTubeMesh(resampled.samples, elevation.z, roll, flowTube.section);
   }, [phase, resampled, elevation, flowTube.cornerBanking, flowTube.section]);
 
-  // validazione 3B: il bordo interno di una curva troppo stretta per il tubo
-  // si auto-intersecherebbe (da segnalare, mai correggere)
+  // validazione 3B: l'erba interna si adatta da sola (D-028), ma se nemmeno
+  // l'ASFALTO ci sta nel raggio la geometria è impossibile (da segnalare)
   const tightCorners = useMemo(() => {
     return resampled.corners
       .filter((c) => !c.skip && c.minR != null)
-      .filter((c) => {
-        const halfTube =
-          flowTube.section.trackWidth / 2 +
-          Math.max(flowTube.section.grassLeft, flowTube.section.grassRight);
-        return c.minR < halfTube;
-      })
+      .filter((c) => c.minR < flowTube.section.trackWidth / 2 + INNER_MARGIN)
       .map((c) => ({ origIndex: c.origIndex, minR: c.minR }));
-  }, [resampled.corners, flowTube.section]);
+  }, [resampled.corners, flowTube.section.trackWidth]);
 
   const startSegLength =
     polygon.startSegment != null
@@ -444,9 +439,9 @@ export default function App() {
                   <div className="stats-grid">
                     {tightCorners.map((c) => (
                       <span key={c.origIndex} className="err" style={{ gridColumn: '1 / -1' }}>
-                        vertice {c.origIndex + 1}: R~{Math.round(c.minR)} m &lt;{' '}
-                        semi-larghezza tubo — il bordo interno si auto-interseca:
-                        allarga i bracci in Fase 2
+                        vertice {c.origIndex + 1}: R~{Math.round(c.minR)} m — nemmeno
+                        l'ASFALTO ({flowTube.section.trackWidth} m) ci sta in questo
+                        raggio: allarga i bracci in Fase 2 o riduci la larghezza pista
                       </span>
                     ))}
                   </div>

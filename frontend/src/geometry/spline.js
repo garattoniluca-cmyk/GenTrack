@@ -149,7 +149,7 @@ export function resampleFilletPath(
   direction,
   arms = {},
   defaultArm = 60,
-  { spacing = 5, minCount = 200, maxCount = 5000 } = {}
+  { spacing = 5, minCount = 200, maxCount = 12000 } = {}
 ) {
   const n = points?.length ?? 0;
   if (n < 3 || startSegment == null || startSegment < 0 || startSegment >= n) {
@@ -205,9 +205,22 @@ export function resampleFilletPath(
     };
   });
 
+  // DENSITÀ ADATTIVA (curve secche): il passo scende col raggio minimo delle
+  // stondature (~R/12 → ≤ ~5° di curva per anello), clampato a [1 m, spacing].
+  // Il campionamento resta UNIFORME (tutti i consumer lo assumono): un
+  // tornante stretto infittisce l'intero anello di sample.
+  let effSpacing = spacing;
+  let minRadius = Infinity;
+  for (const c of corners) {
+    if (!c.skip && Number.isFinite(c.minR) && c.minR < minRadius) minRadius = c.minR;
+  }
+  if (Number.isFinite(minRadius)) {
+    effSpacing = Math.max(1, Math.min(spacing, minRadius / 12));
+  }
+
   const sampleCount = Math.max(
     minCount,
-    Math.min(maxCount, Math.round(totalLength / spacing))
+    Math.min(maxCount, Math.round(totalLength / effSpacing))
   );
 
   const samples = [];
