@@ -7,8 +7,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Arrow, Shape } from 'react-konva';
 import { useTrackStore } from '../../state/trackStore.js';
-import { resampleFilletPath } from '../../geometry/spline.js';
 import { tubeOutlines } from '../../geometry/offset.js';
+import { bankingIndicators } from '../../geometry/banking.js';
 import { useCanvasView } from './useCanvasView.js';
 import GridLayer from './GridLayer.jsx';
 import { COLORS } from './colors.js';
@@ -82,6 +82,33 @@ export default function FlowTubeEditor({ resampled, elevation }) {
     () => resampled.corners.filter((c) => !c.skip),
     [resampled.corners]
   );
+
+  // indicatori di banking: linee a lato del tubo (pieno + transitori)
+  const bankIndicators = useMemo(
+    () => bankingIndicators(resampled.corners, cornerBanking, resampled.totalLength),
+    [resampled.corners, cornerBanking, resampled.totalLength]
+  );
+
+  // polyline offset dalla mezzeria per un range di s (wrap periodico)
+  const offsetRangePoints = (s0, s1, offsetDist) => {
+    const N = samples.length;
+    if (N < 3 || s1 <= s0) return [];
+    const from = Math.ceil(s0 * N);
+    const to = Math.floor(s1 * N);
+    const pts = [];
+    for (let k = from; k <= to; k++) {
+      const i = ((k % N) + N) % N;
+      const prev = samples[(i - 1 + N) % N];
+      const next = samples[(i + 1) % N];
+      let tx = next.x - prev.x;
+      let ty = next.y - prev.y;
+      const l = Math.hypot(tx, ty) || 1;
+      tx /= l;
+      ty /= l;
+      pts.push(samples[i].x + -ty * offsetDist, samples[i].y + tx * offsetDist);
+    }
+    return pts;
+  };
 
   // bordi del tubo (offset dalla mezzeria)
   const outlines = useMemo(
@@ -193,6 +220,49 @@ export default function FlowTubeEditor({ resampled, elevation }) {
 
           {/* mezzeria termica per quota */}
           {zRange && <Shape sceneFunc={drawHeatCenterline} />}
+
+          {/* indicatori banking a lato del tubo: pieno = linea continua,
+              transitori entrata/uscita = tratteggiati */}
+          {bankIndicators.map((ind) => {
+            const grass = ind.outerSign > 0 ? section.grassLeft : section.grassRight;
+            const off = ind.outerSign * (section.trackWidth / 2 + grass + 4);
+            const color = ind.angleDeg > 0 ? '#e3b341' : '#22d3ee';
+            const rampIn = offsetRangePoints(ind.sRampInStart, ind.sStart, off);
+            const full = offsetRangePoints(ind.sStart, ind.sEnd, off);
+            const rampOut = offsetRangePoints(ind.sEnd, ind.sRampOutEnd, off);
+            return (
+              <Group key={`ind${ind.origIndex}`}>
+                {rampIn.length >= 4 && (
+                  <Line
+                    points={rampIn}
+                    stroke={color}
+                    strokeWidth={3 / view.scale}
+                    dash={[8 / view.scale, 6 / view.scale]}
+                    opacity={0.7}
+                    lineCap="round"
+                  />
+                )}
+                {full.length >= 4 && (
+                  <Line
+                    points={full}
+                    stroke={color}
+                    strokeWidth={4.5 / view.scale}
+                    lineCap="round"
+                  />
+                )}
+                {rampOut.length >= 4 && (
+                  <Line
+                    points={rampOut}
+                    stroke={color}
+                    strokeWidth={3 / view.scale}
+                    dash={[8 / view.scale, 6 / view.scale]}
+                    opacity={0.7}
+                    lineCap="round"
+                  />
+                )}
+              </Group>
+            );
+          })}
 
           {/* marker s=0 + freccia verso */}
           {startArrow && (

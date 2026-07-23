@@ -113,6 +113,11 @@ altimetria) su http://localhost:5173. **84 test unitari verdi**.
       periodico); grafico ora sola visualizzazione (BankingProfile);
       `geometry/banking.js` + 7 test (tot **91 verdi**); spline.js registra
       l'estensione s di ogni curva (sStart/sEnd); schema cornerBanking.
+- [x] 2026-07-23 — **Indicatori banking sulla mappa**: linea a lato del tubo
+      sul LATO ESTERNO della curva (quello alzato dal bank) — continua = bank
+      pieno, tratteggiata = transitori in/out; gialla = bank positivo, ciano =
+      negativo. `bankingIndicators()` in banking.js con lato esterno dal
+      cross product delle direzioni di svolta (+3 test, tot **94 verdi**).
 - [ ] Fase 3A: **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).

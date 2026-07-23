@@ -70,3 +70,41 @@ export function buildBankingProfile(sampleCount, totalLength, corners, cornerBan
   }
   return out;
 }
+
+/**
+ * Indicatori visivi del banking per la mappa: per ogni curva con bank,
+ * i range in s di [rampa in | bank pieno | rampa out] e il LATO ESTERNO
+ * della curva (quello che il bank alza): +1 = sinistra, -1 = destra nel
+ * verso di percorrenza. I range possono sforare [0,1]: il renderer wrappa.
+ */
+export function bankingIndicators(corners, cornerBanking, totalLength) {
+  if (!(totalLength > 0)) return [];
+  return corners
+    .filter(
+      (c) =>
+        !c.skip &&
+        c.sStart != null &&
+        c.d1 &&
+        c.d2 &&
+        cornerBanking[c.origIndex] &&
+        cornerBanking[c.origIndex].angleDeg !== 0
+    )
+    .map((c) => {
+      const bk = cornerBanking[c.origIndex];
+      const li = Math.max(0, bk.rampBefore ?? DEFAULT_BANK_RAMP) / totalLength;
+      const lo = Math.max(0, bk.rampAfter ?? DEFAULT_BANK_RAMP) / totalLength;
+      // direzione di svolta: travel_in × travel_out (z). >0 = svolta a
+      // sinistra → l'esterno curva è a DESTRA (-1); <0 → esterno a sinistra.
+      const cross = -c.d1.x * c.d2.y + c.d1.y * c.d2.x;
+      const outerSign = cross > 0 ? -1 : 1;
+      return {
+        origIndex: c.origIndex,
+        angleDeg: bk.angleDeg,
+        outerSign,
+        sRampInStart: c.sStart - li,
+        sStart: c.sStart,
+        sEnd: c.sEnd,
+        sRampOutEnd: c.sEnd + lo,
+      };
+    });
+}

@@ -393,6 +393,7 @@ export default function App() {
                 <ul>
                   <li><b>Click sul marker di una curva</b> — imposta bank e rampe di ritorno a zero</li>
                   <li>Marker <b>giallo</b> = curva con bank; il grafico in basso è sola visualizzazione</li>
+                  <li>Linea a lato del tubo (esterno curva): <b>continua</b> = bank pieno, <b>tratteggiata</b> = transitori; gialla = bank +, ciano = bank −</li>
                   <li><b>🎲 Nuovo seed</b> — altra altimetria con gli stessi parametri</li>
                   <li>Mezzeria colorata per quota (blu=basso, rosso=alto)</li>
                   <li><b>Rotellina / Space+drag</b> — zoom / pan</li>

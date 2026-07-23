@@ -1,6 +1,6 @@
 // Test invarianti banking.js — vedi TESTING.md
 import { describe, it, expect } from 'vitest';
-import { buildBankingProfile, MAX_BANK_DEG } from './banking.js';
+import { buildBankingProfile, bankingIndicators, MAX_BANK_DEG } from './banking.js';
 
 const N = 1000;
 const LEN = 5000; // m → 1 sample ogni 5 m
@@ -72,5 +72,41 @@ describe('buildBankingProfile', () => {
     ];
     const out = buildBankingProfile(N, LEN, cs, { 0: { angleDeg: 9 }, 2: { angleDeg: 9 } });
     expect(out.every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe('bankingIndicators', () => {
+  // curva a SINISTRA (stile quadrato ccw): d1 verso il prev = (-1,0),
+  // d2 verso il next = (0,1) → esterno curva a destra (-1)
+  const leftTurn = {
+    origIndex: 5,
+    skip: false,
+    sStart: 0.4,
+    sEnd: 0.5,
+    d1: { x: -1, y: 0 },
+    d2: { x: 0, y: 1 },
+  };
+  // curva a DESTRA: d2 verso il basso → esterno a sinistra (+1)
+  const rightTurn = { ...leftTurn, origIndex: 6, d2: { x: 0, y: -1 } };
+
+  it('lato esterno corretto per svolte a sinistra e a destra', () => {
+    const out = bankingIndicators([leftTurn, rightTurn], {
+      5: { angleDeg: 10, rampBefore: 250, rampAfter: 500 },
+      6: { angleDeg: 8, rampBefore: 100, rampAfter: 100 },
+    }, 5000);
+    expect(out.find((i) => i.origIndex === 5).outerSign).toBe(-1);
+    expect(out.find((i) => i.origIndex === 6).outerSign).toBe(1);
+  });
+
+  it('range dei transitori in s (rampe in metri / lunghezza)', () => {
+    const out = bankingIndicators([leftTurn], {
+      5: { angleDeg: 10, rampBefore: 250, rampAfter: 500 },
+    }, 5000);
+    expect(out[0].sRampInStart).toBeCloseTo(0.4 - 0.05, 9);
+    expect(out[0].sRampOutEnd).toBeCloseTo(0.5 + 0.1, 9);
+  });
+
+  it('curve senza bank: nessun indicatore', () => {
+    expect(bankingIndicators([leftTurn], {}, 5000)).toEqual([]);
   });
 });
