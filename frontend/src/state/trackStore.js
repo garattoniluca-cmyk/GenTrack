@@ -13,19 +13,23 @@ const initialPolygon = {
   closed: false,
 };
 
-/** Snap alla griglia + clamp dentro l'area di lavoro 5000×5000 m. */
-const snapClamp = (p, gridSize) => snapToGrid(clampToWorld(p), gridSize);
+/**
+ * Snap alla griglia + clamp dentro l'area di lavoro 5000×5000 m.
+ * `snapSize` è il passo di griglia VISIBILE (può essere più grosso di
+ * gridSize quando si è zoomati indietro): lo snap segue ciò che si vede.
+ */
+const snapClamp = (p, snapSize) => snapToGrid(clampToWorld(p), snapSize);
 
 export const useTrackStore = create(
   withHistory(
     (set, get) => ({
       stage1Polygon: initialPolygon,
 
-      /** Aggiunge un punto (già in coordinate mondo), con snap alla griglia. */
-      addPoint: (worldPoint) => {
+      /** Aggiunge un punto (già in coordinate mondo), con snap alla griglia visibile. */
+      addPoint: (worldPoint, snapSize) => {
         const { stage1Polygon } = get();
         if (stage1Polygon.closed) return;
-        const snapped = snapClamp(worldPoint, stage1Polygon.gridSize);
+        const snapped = snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize);
         const last = stage1Polygon.points[stage1Polygon.points.length - 1];
         // Ignora click sullo stesso punto (doppio click accidentale)
         if (last && last.x === snapped.x && last.y === snapped.y) return;
@@ -81,12 +85,12 @@ export const useTrackStore = create(
        * Sposta il punto `index`. snap=false durante il drag (movimento fluido),
        * snap=true al rilascio (aggancio alla griglia).
        */
-      updatePoint: (index, worldPoint, snap = true) => {
+      updatePoint: (index, worldPoint, snap = true, snapSize) => {
         const { stage1Polygon } = get();
         const pts = stage1Polygon.points;
         if (index < 0 || index >= pts.length) return;
         const p = snap
-          ? snapClamp(worldPoint, stage1Polygon.gridSize)
+          ? snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize)
           : clampToWorld(worldPoint);
         const next = pts.slice();
         next[index] = p;
@@ -97,11 +101,11 @@ export const useTrackStore = create(
        * Inserisce un nuovo punto (snappato) sul segmento `segIndex`
        * (segmento i: points[i] → points[(i+1) % n]; n-1 = segmento di chiusura).
        */
-      insertPointOnSegment: (segIndex, worldPoint) => {
+      insertPointOnSegment: (segIndex, worldPoint, snapSize) => {
         const { stage1Polygon } = get();
         const pts = stage1Polygon.points;
         if (segIndex < 0 || segIndex >= pts.length) return;
-        const snapped = snapClamp(worldPoint, stage1Polygon.gridSize);
+        const snapped = snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize);
         const a = pts[segIndex];
         const b = pts[(segIndex + 1) % pts.length];
         // niente duplicati con gli estremi del segmento

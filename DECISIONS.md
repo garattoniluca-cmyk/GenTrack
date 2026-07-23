@@ -116,6 +116,9 @@ visibile); i punti sono clampati dentro l'area. Griglia default 10 m
 0.08–200 px/m (al minimo l'intera area è visibile). Barra di scala stile
 cartina in basso a destra (lunghezze "tonde" 1-2-5×10ⁿ, in m o km).
 Costanti centralizzate in `frontend/src/config.js`.
+**Lo snap segue la griglia visibile**: quando la griglia si ispessisce
+(zoom out), anche lo snap usa il passo ispessito — ciò che si vede è ciò a
+cui ci si aggancia (aggiunta 2026-07-23 su richiesta utente).
 **Motivazione**: scala realistica per circuiti (km), riferimento visivo di
 distanza indipendente dallo zoom.
 

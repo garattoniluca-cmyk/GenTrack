@@ -83,6 +83,11 @@ export default function GridCanvas() {
   const canCloseNow = useMemo(() => !closed && canClose(points), [points, closed]);
   const segments = useMemo(() => segmentLengths(points, closed), [points, closed]);
 
+  // passo di griglia VISIBILE: si ispessisce (×5) quando a schermo le celle
+  // scenderebbero sotto ~8px. Lo snap usa SEMPRE questo passo (griglia visibile).
+  let effGrid = gridSize;
+  while (effGrid * view.scale < 8) effGrid *= 5;
+
   // --- dimensioni responsive del canvas ---
   useEffect(() => {
     const el = containerRef.current;
@@ -198,7 +203,7 @@ export default function GridCanvas() {
     if (e.evt.button !== 0 || spacePan || closed) return;
     const w = pointerWorld();
     if (!w) return;
-    const snapped = snapToGrid(w, gridSize);
+    const snapped = snapToGrid(w, effGrid);
 
     // chiusura: click vicino al primo punto (in px schermo) o sul suo snap esatto
     if (points.length >= 3) {
@@ -213,7 +218,7 @@ export default function GridCanvas() {
     }
     // niente punti duplicati su vertici esistenti
     if (points.some((p) => p.x === snapped.x && p.y === snapped.y)) return;
-    addPoint(w);
+    addPoint(w, effGrid);
   };
 
   // --- drag di un vertice ---
@@ -223,7 +228,8 @@ export default function GridCanvas() {
     updatePoint(i, { x: e.target.x(), y: e.target.y() }, false);
   };
   const onVertexDragEnd = (i) => (e) => {
-    updatePoint(i, { x: e.target.x(), y: e.target.y() }, true); // snap finale
+    // snap finale sulla griglia visibile
+    updatePoint(i, { x: e.target.x(), y: e.target.y() }, true, effGrid);
     endBatch();
   };
 
@@ -232,11 +238,11 @@ export default function GridCanvas() {
     if (!closed || e.evt.button !== 0 || spacePan) return;
     e.cancelBubble = true;
     const w = pointerWorld();
-    if (w) insertPointOnSegment(segIndex, w);
+    if (w) insertPointOnSegment(segIndex, w, effGrid);
   };
 
   // --- dati derivati per il render ---
-  const snappedCursor = cursorWorld && !closed ? snapToGrid(cursorWorld, gridSize) : null;
+  const snappedCursor = cursorWorld && !closed ? snapToGrid(cursorWorld, effGrid) : null;
 
   const rubberConflicts =
     snappedCursor && points.length >= 2
@@ -257,9 +263,8 @@ export default function GridCanvas() {
     cursorWorld &&
     dist(cursorWorld, points[0]) * view.scale <= CLOSE_TOLERANCE_PX;
 
-  // griglia: passo che non scende sotto ~8px a schermo
-  let gridStep = gridSize;
-  while (gridStep * view.scale < 8) gridStep *= 5;
+  // griglia disegnata con lo stesso passo usato dallo snap
+  const gridStep = effGrid;
 
   // disegna solo le linee visibili nel viewport (l'area è 5000×5000 m)
   const E = WORLD_HALF_EXTENT;
