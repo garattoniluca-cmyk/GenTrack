@@ -79,16 +79,23 @@ export function computeVergeWidths(samples, section, totalLength) {
   const effR = new Array(n).fill(section.grassRight);
   const clampedL = new Array(n).fill(false);
   const clampedR = new Array(n).fill(false);
+  // APICE (D-028 rev.3): dove nemmeno il verge minimo mantiene il margine
+  // dal centro di curvatura (avail < MIN_VERGE), il rail avrebbe un raggio
+  // residuo minuscolo (≤ margine) → lì il bordo va COLLASSATO in un punto
+  const apexL = new Array(n).fill(false);
+  const apexR = new Array(n).fill(false);
   for (let i = 0; i < n; i++) {
     const k = kappa[i];
     if (k > 1e-6) {
       // svolta a sinistra → interno a SINISTRA
       const avail = 1 / k - INNER_MARGIN - w;
       if (avail < section.grassLeft) clampedL[i] = true;
+      if (avail < MIN_VERGE) apexL[i] = true;
       effL[i] = Math.min(section.grassLeft, Math.max(MIN_VERGE, avail));
     } else if (k < -1e-6) {
       const avail = 1 / -k - INNER_MARGIN - w;
       if (avail < section.grassRight) clampedR[i] = true;
+      if (avail < MIN_VERGE) apexR[i] = true;
       effR[i] = Math.min(section.grassRight, Math.max(MIN_VERGE, avail));
     }
   }
@@ -107,7 +114,71 @@ export function computeVergeWidths(samples, section, totalLength) {
       }
     }
   }
-  return { effL, effR, clampedL, clampedR };
+  return { effL, effR, clampedL, clampedR, apexL, apexR };
+}
+
+/**
+ * Punto di intersezione STRETTAMENTE INTERNA tra i segmenti [a,b] e [c,d]
+ * (2D), o null. I contatti agli estremi sono esclusi: dopo un collasso i
+ * segmenti condividono legittimamente lo spigolo come endpoint.
+ */
+function segIntersectionPoint(a, b, c, d) {
+  const r = { x: b.x - a.x, y: b.y - a.y };
+  const s = { x: d.x - c.x, y: d.y - c.y };
+  const denom = r.x * s.y - r.y * s.x;
+  if (Math.abs(denom) < 1e-12) return null;
+  const t = ((c.x - a.x) * s.y - (c.y - a.y) * s.x) / denom;
+  const u = ((c.x - a.x) * r.y - (c.y - a.y) * r.x) / denom;
+  const E = 1e-9;
+  if (t < E || t > 1 - E || u < E || u > 1 - E) return null;
+  return { x: a.x + t * r.x, y: a.y + t * r.y };
+}
+
+/**
+ * CLIP DEI CAPPI (D-028 rev.3, "fare un angolo"): vicino a un apice stretto
+ * le due gambe del tornante si sovrappongono e il rail esterno del bordo
+ * interno si AUTO-INTERSECA formando un cappio. Qui il cappio viene
+ * eliminato: tutti gli anelli del cappio collassano nel PUNTO DI
+ * INTERSEZIONE → il bordo erba termina in una punta e le due ali di muro
+ * si incontrano lì formando uno spigolo (union del footprint, come nei
+ * tool di track building). Ricerca locale (finestra di anelli) per non
+ * toccare avvicinamenti globali legittimi (già coperti da D-014).
+ * Ritorna { rail, runs: [{from, to, X}] } (rail modificato in copia).
+ */
+export function collapseRailLoops(rail2D, windowRings = 600) {
+  const n = rail2D.length;
+  const rail = rail2D.map((p) => ({ x: p.x, y: p.y }));
+  const runs = [];
+  const W = Math.min(windowRings, Math.floor(n / 2) - 2);
+  let i = 0;
+  while (i < n) {
+    const a = rail[i % n];
+    const b = rail[(i + 1) % n];
+    let found = null;
+    for (let off = 2; off <= W; off++) {
+      const j = (i + off) % n;
+      const c = rail[j];
+      const d = rail[(j + 1) % n];
+      const X = segIntersectionPoint(a, b, c, d);
+      if (X) {
+        found = { j: i + off, X };
+        break;
+      }
+    }
+    if (found) {
+      // collassa gli anelli del cappio (i+1 .. j) sul punto di intersezione
+      for (let k = i + 1; k <= found.j; k++) {
+        const idx = k % n;
+        rail[idx].x = found.X.x;
+        rail[idx].y = found.X.y;
+      }
+      runs.push({ from: (i + 1) % n, to: found.j % n, X: found.X });
+      i = found.j + 1;
+    } else {
+      i++;
+    }
+  }
+  return { rail, runs };
 }
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -150,14 +221,26 @@ export function buildRibbon(railA, railB, normals, totalLength, flip = false, qu
     uvs[i * 4 + 3] = 1;
 
     if (quadFilter && !quadFilter(i)) continue;
+    const i1 = (i + 1) % n;
     const a = i * 2;
     const b = i * 2 + 1;
-    const a1 = ((i + 1) % n) * 2;
-    const b1 = ((i + 1) % n) * 2 + 1;
+    const a1 = i1 * 2;
+    const b1 = i1 * 2 + 1;
+    // triangoli con vertici coincidenti (rail collassati negli spigoli,
+    // D-028 rev.3): non emessi — qualità da simulatore, zero degeneri
+    const eq = (p, q) => p[0] === q[0] && p[1] === q[1] && p[2] === q[2];
+    const A = railA[i];
+    const B = railB[i];
+    const A1 = railA[i1];
+    const B1 = railB[i1];
+    const tri1Ok = !(eq(A, B) || eq(B, B1) || eq(A, B1));
+    const tri2Ok = !(eq(A, B1) || eq(B1, A1) || eq(A, A1));
     if (!flip) {
-      idx.push(a, b, b1, a, b1, a1);
+      if (tri1Ok) idx.push(a, b, b1);
+      if (tri2Ok) idx.push(a, b1, a1);
     } else {
-      idx.push(a, b1, b, a, a1, b1);
+      if (tri1Ok) idx.push(a, b1, b);
+      if (tri2Ok) idx.push(a, a1, b1);
     }
   }
   return { positions, normals: nrm, uvs, indices: new Uint32Array(idx) };
@@ -211,12 +294,9 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
     P[i] = [samples[i].x, z[i], -samples[i].y];
   }
 
-  // curve secche (D-028): larghezze erba effettive per anello + zone dove
-  // il muro interno va SPEZZATO (apice: curvatura che limita attivamente)
+  // curve secche (D-028): larghezze erba effettive + zone di apice
   const tLen = totalLen(samples);
-  const { effL, effR, clampedL, clampedR } = computeVergeWidths(samples, section, tLen);
-  const wallQuadL = (i) => !(clampedL[i] || clampedL[(i + 1) % n]);
-  const wallQuadR = (i) => !(clampedR[i] || clampedR[(i + 1) % n]);
+  const { effL, effR, apexL, apexR } = computeVergeWidths(samples, section, tLen);
 
   // rail per fascia (condivisi al bit tra fasce adiacenti)
   const rWallLTop = new Array(n);
@@ -289,6 +369,71 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
     ];
   }
 
+  // D-028 rev.3 — SPIGOLO all'apice ("fare un angolo"): due meccanismi.
+  //
+  // (a) APICE PER RAGGIO ESAURITO: negli anelli dove nemmeno il verge
+  //     minimo mantiene il margine (apex mask), il rail avrebbe un raggio
+  //     residuo minuscolo (~0.5 m) → il run collassa nel punto dell'anello
+  //     CENTRALE: il bordo erba termina in una PUNTA e le due ali di muro
+  //     si incontrano lì in uno SPIGOLO condiviso.
+  const collapseRuns = (rail3D, wallTop3D, mask) => {
+    let i = 0;
+    while (i < n) {
+      if (!mask[i]) {
+        i++;
+        continue;
+      }
+      let j = i;
+      while (j + 1 < n && mask[j + 1]) j++;
+      // run [i..j] (i run che toccano il wrap restano due run: accettabile,
+      // l'apice non attraversa mai s=0 — lì c'è il rettilineo di start)
+      const m = Math.floor((i + j) / 2);
+      const corner = rail3D[m];
+      const cornerTop = wallTop3D[m];
+      for (let k = i; k <= j; k++) {
+        rail3D[k] = corner; // identici al bit → spigolo condiviso
+        wallTop3D[k] = cornerTop;
+      }
+      i = j + 1;
+    }
+  };
+  collapseRuns(rGrassLOut, rWallLTop, apexL);
+  collapseRuns(rGrassROut, rWallRTop, apexR);
+
+  // (b) CLIP DEI CAPPI (rete di sicurezza): se il rail in pianta si
+  //     auto-interseca ancora (gambe che si sovrappongono), il cappio
+  //     collassa nel punto di intersezione.
+  const collapseSide = (rail3D, wallTop3D) => {
+    const plan = rail3D.map((p) => ({ x: p[0], y: -p[2] }));
+    const { runs } = collapseRailLoops(plan);
+    for (const run of runs) {
+      const len = ((run.to - run.from + n) % n) + 1;
+      const m = (run.from + Math.floor(len / 2)) % n; // anello rappresentativo
+      // quota del corner: proiezione laterale in pianta sull'anello m
+      const Lm = leftN[m];
+      const plx = Lm[0];
+      const ply = -Lm[2];
+      const h = Math.hypot(plx, ply) || 1;
+      const dcPlan =
+        ((run.X.x - samples[m].x) * plx + (run.X.y - samples[m].y) * ply) / h;
+      const y = P[m][1] + Lm[1] * (dcPlan / h);
+      const corner = [run.X.x, y, -run.X.y];
+      const Um = upN[m];
+      const cornerTop = [
+        corner[0] + Um[0] * wallHeight,
+        corner[1] + Um[1] * wallHeight,
+        corner[2] + Um[2] * wallHeight,
+      ];
+      for (let k = 0; k < len; k++) {
+        const idx = (run.from + k) % n;
+        rail3D[idx] = corner; // identici al bit → spigolo condiviso
+        wallTop3D[idx] = cornerTop;
+      }
+    }
+  };
+  collapseSide(rGrassLOut, rWallLTop);
+  collapseSide(rGrassROut, rWallRTop);
+
   const rightN = leftN.map((l) => [-l[0], -l[1], -l[2]]);
 
   const bands = {
@@ -302,11 +447,12 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
       buildRibbon(rLineROut, rGrassROut, grassRN, tLen),
     ]),
     walls: mergeIndexed([
-      // muro SX: faccia interna verso destra (−L) → winding flip;
-      // spezzato dove la curvatura strizza il lato (D-028 rev.2)
-      buildRibbon(rWallLTop, rGrassLOut, rightN, tLen, true, wallQuadL),
+      // muro SX: faccia interna verso destra (−L) → winding flip.
+      // Nei cappi collassati i quad degenerano e vengono saltati: le ali
+      // terminano nello spigolo condiviso (D-028 rev.3)
+      buildRibbon(rWallLTop, rGrassLOut, rightN, tLen, true),
       // muro DX: faccia interna verso sinistra (+L)
-      buildRibbon(rWallRTop, rGrassROut, leftN, tLen, false, wallQuadR),
+      buildRibbon(rWallRTop, rGrassROut, leftN, tLen, false),
     ]),
   };
 

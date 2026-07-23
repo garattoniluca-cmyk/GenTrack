@@ -1,4 +1,4 @@
-// Test invarianti flowTubeMesh.js (qualità da simulatore) — vedi TESTING.md
+﻿// Test invarianti flowTubeMesh.js (qualità da simulatore) — vedi TESTING.md
 import { describe, it, expect } from 'vitest';
 import {
   buildFlowTubeMesh,
@@ -7,6 +7,7 @@ import {
   buildRibbon,
   signedCurvature,
   computeVergeWidths,
+  collapseRailLoops,
   INNER_MARGIN,
   MIN_VERGE,
   VERGE_SLEW,
@@ -304,27 +305,72 @@ describe('curve secche (D-028): verge interno che si restringe', () => {
     expect(flipped).toBe(0);
   });
 
-  it('MURO INTERNO SPEZZATO all\'apice (D-028 rev.2): niente pieghe, bordi netti', () => {
-    const hairpinPath = resampleFilletPath(square, 0, 'ccw', { 2: { in: 15, out: 15 } }, 150);
-    const hN = hairpinPath.sampleCount;
-    const m = buildFlowTubeMesh(
-      hairpinPath.samples,
-      new Array(hN).fill(0),
-      new Array(hN).fill(0),
-      SECTION
-    );
-    const walls = m.bands.walls;
-    // qualche quad di muro è stato rimosso all'apice…
-    expect(walls.indices.length).toBeLessThan(12 * hN);
-    // …ma solo lì: almeno il 95% del muro resta
-    expect(walls.indices.length).toBeGreaterThan(12 * hN * 0.9);
-    // e i triangoli rimasti sono tutti sani (la piega era all'apice)
-    expect(minTriangleArea(walls)).toBeGreaterThan(1e-6);
-  });
-
   it('senza curve secche il muro resta INTERO', () => {
     const wallsFull = mesh.bands.walls; // quadrato con stondature R~106
     expect(wallsFull.indices.length).toBe(12 * N);
+  });
+
+  // tornante VERO: poligono con un vertice acuto (~60°) — è la forma dello
+  // screenshot dell'utente: le due gambe convergono e il bordo interno
+  // si auto-interseca in un cappio
+  const vee = [P(0, 0), P(2000, 0), P(2000, 2000), P(1000, 300), P(0, 2000)];
+  const buildVee = () => {
+    const veePath = resampleFilletPath(vee, 0, 'ccw', { 3: { in: 30, out: 30 } }, 100);
+    const vN = veePath.sampleCount;
+    return {
+      vN,
+      m: buildFlowTubeMesh(
+        veePath.samples,
+        new Array(vN).fill(0),
+        new Array(vN).fill(0),
+        SECTION
+      ),
+    };
+  };
+
+  it('CLIP DEI CAPPI (rev.3): il bordo interno collassa in uno SPIGOLO condiviso', () => {
+    const { vN, m } = buildVee();
+    const g = m.bands.grass;
+    const half = g.positions.length / 2;
+    // sequenze di punti IDENTICI sui rail esterni (lo spigolo del tornante)
+    let identicalRuns = 0;
+    for (let i = 0; i < vN - 1; i++) {
+      const sameL =
+        g.positions[i * 6] === g.positions[(i + 1) * 6] &&
+        g.positions[i * 6 + 2] === g.positions[(i + 1) * 6 + 2];
+      const sameR =
+        g.positions[half + i * 6 + 3] === g.positions[half + (i + 1) * 6 + 3] &&
+        g.positions[half + i * 6 + 5] === g.positions[half + (i + 1) * 6 + 5];
+      if (sameL || sameR) identicalRuns++;
+    }
+    expect(identicalRuns).toBeGreaterThan(0); // il collasso è avvenuto
+    // nessun triangolo degenere emesso, in NESSUNA fascia
+    for (const band of Object.values(m.bands)) {
+      expect(minTriangleArea(band)).toBeGreaterThan(1e-8);
+    }
+    // il muro perde solo i quad del cappio, non sparisce
+    expect(m.bands.walls.indices.length).toBeGreaterThan(12 * vN * 0.5);
+    expect(m.bands.walls.indices.length).toBeLessThan(12 * vN);
+  });
+
+  it('CLIP DEI CAPPI: dopo il collasso i rail non si auto-intersecano più', () => {
+    const { vN, m } = buildVee();
+    const g = m.bands.grass;
+    const half = g.positions.length / 2;
+    for (const [base, off] of [
+      [0, 0], // rail esterno erba SX
+      [half, 3], // rail esterno erba DX
+    ]) {
+      const plan = [];
+      for (let i = 0; i < vN; i++) {
+        plan.push({
+          x: g.positions[base + i * 6 + off],
+          y: -g.positions[base + i * 6 + off + 2],
+        });
+      }
+      const { runs } = collapseRailLoops(plan);
+      expect(runs).toEqual([]); // nessun cappio residuo
+    }
   });
 
   it('densità adattiva: il tornante infittisce gli anelli', () => {

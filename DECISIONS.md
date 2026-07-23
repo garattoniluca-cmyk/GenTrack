@@ -418,14 +418,29 @@ qualsiasi tool: i tornanti reali RESTRINGONO il verge interno.
    resta intatto e torna appena il raggio lo consente.
 **Costanti**: INNER_MARGIN 1.5 m, MIN_VERGE 0.5 m, VERGE_SLEW 0.5 m/m
 (flowTubeMesh.js). Il footprint 2D (3A) mostra ancora larghezze nominali.
-**Rev. 2 (2026-07-23, proposta dell'utente)**: all'APICE il MURO INTERNO
-viene SPEZZATO — negli anelli dove la curvatura limita attivamente il
-verge (clamped pre-slew) i quad del muro non vengono emessi: le due ali
-di muro terminano con bordi di taglio netti ai lati dell'apice (come i
-muretti dei tornanti reali) invece di piegarsi attorno a un arco da
-1.5 m (era l'ultimo artefatto visibile). Implementato con `quadFilter`
-in buildRibbon; erba e asfalto restano continui. Test: rimozione solo
-all'apice (>90% muro intatto), zero triangoli degeneri nei muri.
+~~Rev. 2: muro spezzato con BUCO (quad non emessi nella zona clamped)~~
+— BOCCIATA dall'utente ("peggio di prima"): le ali residue si
+sovrapponevano visivamente; il buco non era ciò che intendeva.
+**Rev. 3 (2026-07-23) — SPIGOLO, non buco** ("fare un angolo e spezzare
+il muro" = le ali si INCONTRANO in uno spigolo condiviso):
+· Diagnosi misurata: nessun cappio di auto-intersezione — il vero
+  artefatto era il RAGGIO RESIDUO del rail interno quando avail scende
+  sotto MIN_VERGE (rail costretto su un archetto da ~0.5 m).
+· Meccanismo (a) — APICE PER RAGGIO ESAURITO: i run di anelli con
+  avail < MIN_VERGE collassano nel punto dell'anello centrale: bordo
+  erba a PUNTA, ali di muro che convergono nello stesso vertice
+  (spigolo condiviso al bit).
+· Meccanismo (b) — CLIP DEI CAPPI (rete di sicurezza): se il rail in
+  pianta si auto-interseca comunque (gambe sovrapposte), il cappio
+  collassa nel punto di intersezione (union del footprint). Intersezioni
+  solo STRETTAMENTE interne (i contatti agli endpoint post-collasso sono
+  legittimi).
+· buildRibbon salta i triangoli con vertici coincidenti (zero degeneri
+  emessi, sempre) — i run collassati generano il ventaglio d'erba
+  corretto e ali di muro pulite.
+Test (131): collasso avvenuto su vertice acuto ~60°, zero cappi residui
+su entrambi i lati, zero triangoli degeneri in tutte le fasce, muro
+ampiamente intatto fuori dall'apice, muro INTERO senza curve secche.
 
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
