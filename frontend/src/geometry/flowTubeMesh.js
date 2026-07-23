@@ -79,23 +79,16 @@ export function computeVergeWidths(samples, section, totalLength) {
   const effR = new Array(n).fill(section.grassRight);
   const clampedL = new Array(n).fill(false);
   const clampedR = new Array(n).fill(false);
-  // APICE (D-028 rev.3): dove nemmeno il verge minimo mantiene il margine
-  // dal centro di curvatura (avail < MIN_VERGE), il rail avrebbe un raggio
-  // residuo minuscolo (≤ margine) → lì il bordo va COLLASSATO in un punto
-  const apexL = new Array(n).fill(false);
-  const apexR = new Array(n).fill(false);
   for (let i = 0; i < n; i++) {
     const k = kappa[i];
     if (k > 1e-6) {
       // svolta a sinistra → interno a SINISTRA
       const avail = 1 / k - INNER_MARGIN - w;
       if (avail < section.grassLeft) clampedL[i] = true;
-      if (avail < MIN_VERGE) apexL[i] = true;
       effL[i] = Math.min(section.grassLeft, Math.max(MIN_VERGE, avail));
     } else if (k < -1e-6) {
       const avail = 1 / -k - INNER_MARGIN - w;
       if (avail < section.grassRight) clampedR[i] = true;
-      if (avail < MIN_VERGE) apexR[i] = true;
       effR[i] = Math.min(section.grassRight, Math.max(MIN_VERGE, avail));
     }
   }
@@ -114,7 +107,7 @@ export function computeVergeWidths(samples, section, totalLength) {
       }
     }
   }
-  return { effL, effR, clampedL, clampedR, apexL, apexR };
+  return { effL, effR, clampedL, clampedR };
 }
 
 /**
@@ -294,9 +287,9 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
     P[i] = [samples[i].x, z[i], -samples[i].y];
   }
 
-  // curve secche (D-028): larghezze erba effettive + zone di apice
+  // curve secche (D-028): larghezze erba effettive per anello
   const tLen = totalLen(samples);
-  const { effL, effR, apexL, apexR } = computeVergeWidths(samples, section, tLen);
+  const { effL, effR } = computeVergeWidths(samples, section, tLen);
 
   // rail per fascia (condivisi al bit tra fasce adiacenti)
   const rWallLTop = new Array(n);
@@ -369,40 +362,15 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
     ];
   }
 
-  // D-028 rev.3 — SPIGOLO all'apice ("fare un angolo"): due meccanismi.
+  // D-028 rev.4 — per un tracciato VALIDO (asfalto che ci sta: R ≥ w+1.5)
+  // il bordo interno col cuneo di verge ha raggio residuo ≥ 1 m e NON si
+  // auto-interseca MAI: il muro deve semplicemente SEGUIRE il cuneo attorno
+  // all'apice, senza collassi (il collasso "a punto" della rev.3 tagliava
+  // corde diagonali attraverso l'erba — bocciato dall'utente).
   //
-  // (a) APICE PER RAGGIO ESAURITO: negli anelli dove nemmeno il verge
-  //     minimo mantiene il margine (apex mask), il rail avrebbe un raggio
-  //     residuo minuscolo (~0.5 m) → il run collassa nel punto dell'anello
-  //     CENTRALE: il bordo erba termina in una PUNTA e le due ali di muro
-  //     si incontrano lì in uno SPIGOLO condiviso.
-  const collapseRuns = (rail3D, wallTop3D, mask) => {
-    let i = 0;
-    while (i < n) {
-      if (!mask[i]) {
-        i++;
-        continue;
-      }
-      let j = i;
-      while (j + 1 < n && mask[j + 1]) j++;
-      // run [i..j] (i run che toccano il wrap restano due run: accettabile,
-      // l'apice non attraversa mai s=0 — lì c'è il rettilineo di start)
-      const m = Math.floor((i + j) / 2);
-      const corner = rail3D[m];
-      const cornerTop = wallTop3D[m];
-      for (let k = i; k <= j; k++) {
-        rail3D[k] = corner; // identici al bit → spigolo condiviso
-        wallTop3D[k] = cornerTop;
-      }
-      i = j + 1;
-    }
-  };
-  collapseRuns(rGrassLOut, rWallLTop, apexL);
-  collapseRuns(rGrassROut, rWallRTop, apexR);
-
-  // (b) CLIP DEI CAPPI (rete di sicurezza): se il rail in pianta si
-  //     auto-interseca ancora (gambe che si sovrappongono), il cappio
-  //     collassa nel punto di intersezione.
+  // CLIP DEI CAPPI (rete di sicurezza per i casi estremi/invalidi): se il
+  // rail in pianta si auto-interseca (raggio esaurito), il cappio collassa
+  // nel punto di intersezione — le ali si incontrano in uno spigolo.
   const collapseSide = (rail3D, wallTop3D) => {
     const plan = rail3D.map((p) => ({ x: p[0], y: -p[2] }));
     const { runs } = collapseRailLoops(plan);

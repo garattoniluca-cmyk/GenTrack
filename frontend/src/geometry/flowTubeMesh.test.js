@@ -328,34 +328,26 @@ describe('curve secche (D-028): verge interno che si restringe', () => {
     };
   };
 
-  it('CLIP DEI CAPPI (rev.3): il bordo interno collassa in uno SPIGOLO condiviso', () => {
-    const { vN, m } = buildVee();
+  it('TORNANTE VALIDO (rev.4): il muro SEGUE il cuneo — INTERO, niente corde né collassi', () => {
+    const { vN, m } = buildVee(); // minR ~8.9 > 7.5: tracciato valido
+    // muro completo: nessun quad rimosso
+    expect(m.bands.walls.indices.length).toBe(12 * vN);
+    // nessun run di vertici identici (nessun collasso)
     const g = m.bands.grass;
-    const half = g.positions.length / 2;
-    // sequenze di punti IDENTICI sui rail esterni (lo spigolo del tornante)
-    let identicalRuns = 0;
+    let identical = 0;
     for (let i = 0; i < vN - 1; i++) {
-      const sameL =
+      if (
         g.positions[i * 6] === g.positions[(i + 1) * 6] &&
-        g.positions[i * 6 + 2] === g.positions[(i + 1) * 6 + 2];
-      const sameR =
-        g.positions[half + i * 6 + 3] === g.positions[half + (i + 1) * 6 + 3] &&
-        g.positions[half + i * 6 + 5] === g.positions[half + (i + 1) * 6 + 5];
-      if (sameL || sameR) identicalRuns++;
+        g.positions[i * 6 + 2] === g.positions[(i + 1) * 6 + 2]
+      ) {
+        identical++;
+      }
     }
-    expect(identicalRuns).toBeGreaterThan(0); // il collasso è avvenuto
-    // nessun triangolo degenere emesso, in NESSUNA fascia
+    expect(identical).toBe(0);
+    // nessun triangolo degenere, nessun cappio nei rail
     for (const band of Object.values(m.bands)) {
       expect(minTriangleArea(band)).toBeGreaterThan(1e-8);
     }
-    // il muro perde solo i quad del cappio, non sparisce
-    expect(m.bands.walls.indices.length).toBeGreaterThan(12 * vN * 0.5);
-    expect(m.bands.walls.indices.length).toBeLessThan(12 * vN);
-  });
-
-  it('CLIP DEI CAPPI: dopo il collasso i rail non si auto-intersecano più', () => {
-    const { vN, m } = buildVee();
-    const g = m.bands.grass;
     const half = g.positions.length / 2;
     for (const [base, off] of [
       [0, 0], // rail esterno erba SX
@@ -368,8 +360,38 @@ describe('curve secche (D-028): verge interno che si restringe', () => {
           y: -g.positions[base + i * 6 + off + 2],
         });
       }
-      const { runs } = collapseRailLoops(plan);
-      expect(runs).toEqual([]); // nessun cappio residuo
+      expect(collapseRailLoops(plan).runs).toEqual([]);
+    }
+  });
+
+  it('caso ESTREMO (raggio esaurito): il clip di sicurezza produce lo spigolo, zero cappi residui', () => {
+    // bracci minuscoli → minR sotto il limite dell'asfalto (caso rosso):
+    // la mesh deve comunque restare sana, con le ali che si incontrano
+    const tightPath = resampleFilletPath(vee, 0, 'ccw', { 3: { in: 7, out: 7 } }, 100);
+    const tN = tightPath.sampleCount;
+    const m = buildFlowTubeMesh(
+      tightPath.samples,
+      new Array(tN).fill(0),
+      new Array(tN).fill(0),
+      SECTION
+    );
+    const g = m.bands.grass;
+    const half = g.positions.length / 2;
+    for (const [base, off] of [
+      [0, 0],
+      [half, 3],
+    ]) {
+      const plan = [];
+      for (let i = 0; i < tN; i++) {
+        plan.push({
+          x: g.positions[base + i * 6 + off],
+          y: -g.positions[base + i * 6 + off + 2],
+        });
+      }
+      expect(collapseRailLoops(plan).runs).toEqual([]); // niente cappi residui
+    }
+    for (const band of Object.values(m.bands)) {
+      expect(minTriangleArea(band)).toBeGreaterThan(1e-8); // zero degeneri
     }
   });
 

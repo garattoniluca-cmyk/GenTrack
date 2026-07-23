@@ -206,16 +206,17 @@ export function resampleFilletPath(
   });
 
   // DENSITÀ ADATTIVA (curve secche): il passo scende col raggio minimo delle
-  // stondature (~R/12 → ≤ ~5° di curva per anello), clampato a [1 m, spacing].
-  // Il campionamento resta UNIFORME (tutti i consumer lo assumono): un
-  // tornante stretto infittisce l'intero anello di sample.
+  // stondature, clampato a [0.5 m, spacing]. Il divisore 16 tiene liscio
+  // anche il BORDO INTERNO del tubo (raggio locale ≈ minR − w − verge, ben
+  // più piccolo di minR). Il campionamento resta UNIFORME (tutti i
+  // consumer lo assumono): un tornante stretto infittisce tutto il giro.
   let effSpacing = spacing;
   let minRadius = Infinity;
   for (const c of corners) {
     if (!c.skip && Number.isFinite(c.minR) && c.minR < minRadius) minRadius = c.minR;
   }
   if (Number.isFinite(minRadius)) {
-    effSpacing = Math.max(1, Math.min(spacing, minRadius / 12));
+    effSpacing = Math.max(0.5, Math.min(spacing, minRadius / 16));
   }
 
   const sampleCount = Math.max(

@@ -438,9 +438,22 @@ il muro" = le ali si INCONTRANO in uno spigolo condiviso):
 · buildRibbon salta i triangoli con vertici coincidenti (zero degeneri
   emessi, sempre) — i run collassati generano il ventaglio d'erba
   corretto e ali di muro pulite.
-Test (131): collasso avvenuto su vertice acuto ~60°, zero cappi residui
-su entrambi i lati, zero triangoli degeneri in tutte le fasce, muro
-ampiamente intatto fuori dall'apice, muro INTERO senza curve secche.
+~~Rev. 3: collasso a punto unico dei run di apice~~ — BOCCIATA
+dall'utente: il collasso faceva tagliare al muro CORDE DIAGONALI
+attraverso l'erba (gamba→apice→gamba incrociate).
+**Rev. 4 (2026-07-23) — FINALE: il muro SEGUE il cuneo.**
+Presa d'atto geometrica: per un tracciato VALIDO (asfalto che ci sta,
+R ≥ w+1.5) il bordo interno col cuneo di verge ha raggio residuo ≥ 1 m
+e NON si auto-interseca mai → NESSUN collasso necessario: il muro segue
+semplicemente il cuneo attorno all'apice con una U stretta e continua.
+Densità alzata perché la U sia liscia (passo = clamp(minR/16, 0.5, 5)).
+Il CLIP DEI CAPPI resta solo come rete di sicurezza per i casi
+estremi/invalidi (raggio esaurito): lì il cappio collassa nel punto di
+intersezione (spigolo). buildRibbon continua a non emettere mai
+triangoli degeneri. Test (131): tornante valido → muro INTERO che segue
+il cuneo, zero collassi, zero cappi; caso estremo (bracci 7) → clip
+attivo, zero cappi residui, zero degeneri. Verificato con screenshot
+in scena: U pulita all'apice.
 
 <!-- Template nuova decisione:
 ### D-0XX — Titolo

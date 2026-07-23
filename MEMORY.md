@@ -194,16 +194,16 @@ http://localhost:5173. **112 test unitari verdi**.
       se R < w+1.5). Test: tornante bracci 15 → zero triangoli ribaltati,
       cerchio R12 → verge 4.5 m esatto, slew rispettato, +11 test (tot
       **128 verdi**). Live: tornante con 2542 anelli senza errori.
-- [x] 2026-07-23 — **Spigolo all'apice, iterazione finale** (D-028 rev.3):
-      rev.2 (buco nel muro) BOCCIATA — "fare un angolo" significava che le
-      ali si INCONTRANO in uno spigolo. Diagnosi misurata: l'artefatto era
-      il raggio residuo (~0.5 m) del rail quando avail < MIN_VERGE, non un
-      cappio. Meccanismi: (a) run di apice collassati nel punto centrale →
-      erba a punta + muri convergenti nello stesso vertice; (b) clip dei
-      cappi come rete di sicurezza (intersezioni solo interne);
-      buildRibbon non emette mai triangoli con vertici coincidenti.
-      Tot **131 test verdi** (vertice acuto 60°: collasso avvenuto, zero
-      cappi residui, zero degeneri). Scenario V pronto nell'app.
+- [x] 2026-07-23 — **Muro all'apice: 4 revisioni, FINALE = "segue il cuneo"**
+      (D-028 rev.4): rev.2 buco (bocciata), rev.3 collasso a punto (bocciata:
+      corde diagonali sull'erba). Presa d'atto: per tracciati VALIDI
+      (R ≥ w+1.5) il bordo interno NON si auto-interseca mai (raggio residuo
+      ≥ 1 m) → nessun meccanismo speciale: il muro segue il cuneo con una U
+      stretta; densità alzata (minR/16, floor 0.5 m) per la U liscia; clip
+      dei cappi solo come safety per i casi invalidi. **131 test verdi**;
+      verificato VISIVAMENTE volando all'apice (drag+tasti sintetici):
+      U pulita, muro intero. LEZIONE: prima di inventare meccanismi,
+      chiedersi se il caso patologico può davvero esistere nel dominio valido.
 - [ ] Fase 3B: **validazione utente** in corso (tornante + rampe bank ≥89 m).
 - ⚠ La persistenza JSON è sempre più urgente: ogni aggiornamento del codice
       resetta il tracciato dell'utente (successo ripetutamente oggi).
