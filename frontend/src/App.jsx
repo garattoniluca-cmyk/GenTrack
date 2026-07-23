@@ -1,5 +1,7 @@
 // App.jsx — shell TrackGen: switcher di fase, toolbar, statusbar, pannello dati.
-import { useMemo } from 'react';
+// NOTA: mai usare window.confirm/alert — i dialog nativi sono bloccati in
+// alcuni ambienti embedded (preview) e falliscono in silenzio. Solo modali interne.
+import { useMemo, useState } from 'react';
 import GridCanvas from './components/editor2d/GridCanvas.jsx';
 import SplineEditor from './components/editor2d/SplineEditor.jsx';
 import {
@@ -85,6 +87,10 @@ export default function App() {
   const phase2Ready =
     polygon.closed && polygon.startSegment != null && !startTooShort;
 
+  // modale interna di conferma rigenerazione (MAI window.confirm: bloccato
+  // negli ambienti embedded, fallirebbe in silenzio)
+  const [confirmRegenOpen, setConfirmRegenOpen] = useState(false);
+
   // ingresso in Fase 2: se il poligono è cambiato, i raggi override decadono
   const goPhase2 = () => {
     if (!phase2Ready) return;
@@ -95,15 +101,16 @@ export default function App() {
       st.stage2Spline.sourceFingerprint != null &&
       st.stage2Spline.sourceFingerprint !== fp;
     if (hasEdits) {
-      const ok = window.confirm(
-        'Il poligono è cambiato dall\'ultima sessione di Fase 2.\n' +
-          'I raggi personalizzati delle curve verranno reimpostati al default. Continuare?'
-      );
-      if (!ok) return;
-      st.generateSplineFromPolygon(true);
-    } else {
-      st.generateSplineFromPolygon();
+      setConfirmRegenOpen(true);
+      return;
     }
+    st.generateSplineFromPolygon();
+    setPhase(2);
+  };
+
+  const confirmRegen = () => {
+    useTrackStore.getState().generateSplineFromPolygon(true);
+    setConfirmRegenOpen(false);
     setPhase(2);
   };
 
@@ -295,6 +302,26 @@ export default function App() {
           )}
         </aside>
       </main>
+
+      {confirmRegenOpen && (
+        <div className="modal-overlay" onClick={() => setConfirmRegenOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Poligono modificato</h3>
+            <p>
+              Il poligono è cambiato dall'ultima sessione di Fase 2.
+              <br />
+              I <b>raggi personalizzati</b> delle curve verranno reimpostati al
+              default ({useTrackStore.getState().stage2Spline.defaultRadius} m).
+            </p>
+            <div className="modal-actions">
+              <button onClick={() => setConfirmRegenOpen(false)}>Annulla</button>
+              <button className="primary" onClick={confirmRegen}>
+                Continua in Fase 2
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="statusbar">
         {phase === 1 ? (

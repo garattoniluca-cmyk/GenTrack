@@ -208,6 +208,16 @@ puro (useMemo nei componenti) — undo/redo sempre coerente.
 **Motivazione**: s=0 esatto sulla linea del traguardo; lo start ha ≥700 m
 (D-015) quindi la metà del rettilineo è sempre su un tratto rettilineo.
 
+### D-020 — Mai dialog nativi del browser (confirm/alert/prompt)
+**Data**: 2026-07-23 (bug segnalato dall'utente: "non passa alla fase 2")
+**Decisione**: vietato `window.confirm/alert/prompt` in tutta l'app — negli
+ambienti embedded (es. pannello preview) i dialog nativi sono bloccati e
+falliscono IN SILENZIO (confirm ritorna false senza mostrare nulla): il
+click sembrava non fare niente. Usare sempre modali interne React
+(`.modal-overlay`/`.modal` in index.css).
+**Sintomo osservato**: tab "2 · Spline" cliccabile ma inerte quando serviva
+la conferma di rigenerazione — il confirm bloccato inghiottiva l'azione.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD

@@ -78,6 +78,10 @@ Editor poligonale (Fase 1) + editor spline (Fase 2) su http://localhost:5173.
       (rettilinei esatti entro 1e-9, archi sul cerchio, lunghezza analitica).
 - [x] 2026-07-23 — **Fix inserimento su segmento** (D-019): proiezione sul
       segmento (1 cm) invece dello snap a griglia che lo spostava fuori.
+- [x] 2026-07-23 — **Fix "non passa alla Fase 2"** (D-020): `window.confirm`
+      è bloccato in silenzio nel pannello preview → la conferma di
+      rigenerazione inghiottiva il click. Sostituito con modale interna React.
+      Regola: mai dialog nativi del browser nell'app.
 - [ ] Fase 2 (fillet): **validazione visiva/interattiva dell'utente** in corso.
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —
