@@ -179,7 +179,14 @@ http://localhost:5173. **112 test unitari verdi**.
       terreno (apron), erba lato alto nel piano bankato, scambio lati solo a
       roll=0 dove i rami coincidono. +2 test (tot **117 verdi**).
       Verificato con screenshot: curva bankata ancorata a terra, zero gobbe.
-- [ ] Fase 3B: **validazione utente** in corso.
+- [x] 2026-07-23 — **Diagnosi "deformazioni" 3B con MISURE live** (D-027):
+      la mesh era esatta (mezzeria dev. 0.000000, sezioni rigide, zero
+      conflitti); causa reale = curva 25° con rampa 25 m → bordo asfalto al
+      14%, bordo erba ~33% (config estrema non segnalata). Aggiunta
+      `bankingRampQuality`: warning giallo (popup curva + statusbar 3A/3B)
+      con pendenza effettiva e rampa minima consigliata (25° → ≥89 m).
+      121 test verdi. LEZIONE: misurare prima di iterare sulla geometria.
+- [ ] Fase 3B: **validazione utente** in corso (riprovare con rampe ≥89 m).
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello

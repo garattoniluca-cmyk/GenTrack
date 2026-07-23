@@ -20,7 +20,12 @@ import {
 } from './geometry/polygon.js';
 import { resampleFilletPath } from './geometry/spline.js';
 import { buildElevation } from './geometry/trackNoise.js';
-import { buildBankingProfile, buildBankingRoll, bankingConflicts } from './geometry/banking.js';
+import {
+  buildBankingProfile,
+  buildBankingRoll,
+  bankingConflicts,
+  bankingRampQuality,
+} from './geometry/banking.js';
 import { buildFlowTubeMesh } from './geometry/flowTubeMesh.js';
 
 export default function App() {
@@ -134,6 +139,12 @@ export default function App() {
     () =>
       bankingConflicts(resampled.totalLength, resampled.corners, flowTube.cornerBanking),
     [resampled.totalLength, resampled.corners, flowTube.cornerBanking]
+  );
+
+  // rampe troppo corte per l'angolo (D-027): warning, mai correzione
+  const rampWarnings = useMemo(
+    () => bankingRampQuality(flowTube.cornerBanking, flowTube.section),
+    [flowTube.cornerBanking, flowTube.section]
   );
 
   // Fase 3B: mesh 3D (solo quando serve)
@@ -637,6 +648,12 @@ export default function App() {
             {bankConflicts.length > 0 && (
               <span className="err">⚠ rampe bank in conflitto — sistemale in 3A</span>
             )}
+            {rampWarnings.length > 0 && (
+              <span className="warn">
+                ⚠ {rampWarnings.length} rampe bank troppo corte (bordo &gt;10%) —
+                dettagli nel popup curva in 3A
+              </span>
+            )}
             {tightCorners.length > 0 && (
               <span className="err">
                 ⚠ {tightCorners.length} curve più strette del tubo — vedi pannello
@@ -671,6 +688,12 @@ export default function App() {
                   .map((c) => `eccesso ${Math.ceil(c.excessM)} m`)
                   .join(' · ')}{' '}
                 — riduci le rampe
+              </span>
+            )}
+            {rampWarnings.length > 0 && (
+              <span className="warn">
+                ⚠ {rampWarnings.length} rampe troppo corte per l'angolo (bordo
+                &gt;10%) — click sulla curva per i minimi consigliati
               </span>
             )}
             {elevation && (

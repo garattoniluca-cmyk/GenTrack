@@ -375,6 +375,24 @@ pendenza max 0.29% (spigolo vero ~10%).
   Test: mai sotto quota, bordo basso carreggiata inchiodato, apron piatto
   al bit, gobba ≤ 2w·sin(roll), continuità verticale sulle rampe.
 
+### D-027 — Validazione del tasso di torsione delle rampe di bank
+**Data**: 2026-07-23 (dopo la diagnosi delle "deformazioni" in 3B)
+**Contesto**: le deformazioni segnalate dall'utente in 3B NON erano un bug
+della mesh — misure live: mezzeria a z con deviazione 0.000000, sezioni
+rigide, zero conflitti. Causa reale: curva a 25° con rampAfter=25 m →
+25° scaricati in 25 m = pendenza verticale 14% al bordo asfalto, ~33% al
+bordo erba (Daytona scarica 31° in ~300 m). Lo sweep rigido rappresentava
+fedelmente una configurazione estrema che l'app non segnalava.
+**Decisione**: `bankingRampQuality()` — warning (mai correzione, D-024)
+quando la pendenza di picco al bordo del tubo supera il 10%:
+grade = 1.5·arm·sin(A)/rampa, con arm = w/2+max(erba); rampa minima
+consigliata = 1.5·arm·sin(A)/0.10 (per 25° con tubo 12+8+8: ≥89 m).
+Mostrato nel popup della curva (pendenze in/out + minimo consigliato),
+in statusbar 3A e 3B (giallo).
+**Lezione di processo**: davanti a "è deformato", MISURARE prima di
+iterare sulla geometria — le rev. 2 e 3 di D-026 inseguivano un bug che
+non c'era più.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD

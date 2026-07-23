@@ -8,7 +8,11 @@ import { useMemo, useState, useEffect } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Arrow, Shape } from 'react-konva';
 import { useTrackStore } from '../../state/trackStore.js';
 import { tubeOutlines } from '../../geometry/offset.js';
-import { bankingIndicators, bankingConflicts } from '../../geometry/banking.js';
+import {
+  bankingIndicators,
+  bankingConflicts,
+  bankingRampQuality,
+} from '../../geometry/banking.js';
 import { useCanvasView } from './useCanvasView.js';
 import GridLayer from './GridLayer.jsx';
 import { COLORS } from './colors.js';
@@ -93,6 +97,12 @@ export default function FlowTubeEditor({ resampled, elevation }) {
   const bankConflicts = useMemo(
     () => bankingConflicts(resampled.totalLength, resampled.corners, cornerBanking),
     [resampled.totalLength, resampled.corners, cornerBanking]
+  );
+
+  // rampe troppo corte per l'angolo (D-027): pendenza di bordo violenta
+  const rampQuality = useMemo(
+    () => bankingRampQuality(cornerBanking, section),
+    [cornerBanking, section]
   );
 
   // polyline offset dalla mezzeria per un range di s (wrap periodico)
@@ -413,6 +423,30 @@ export default function FlowTubeEditor({ resampled, elevation }) {
                       almeno {Math.ceil(Math.max(...conf.map((c) => c.excessM)))} m
                       (gap disponibile{' '}
                       {Math.floor(Math.min(...conf.map((c) => c.gapM)))} m)
+                    </div>
+                  );
+                })()}
+                {(() => {
+                  const short = rampQuality.filter(
+                    (w) => w.origIndex === bankEdit.origIndex
+                  );
+                  if (short.length === 0) return null;
+                  const minM = Math.max(...short.map((w) => w.minRampM));
+                  return (
+                    <div className="bank-popup-warn">
+                      ⚠ Rampa troppo corta per {bk.angleDeg}°: pendenza al bordo
+                      del tubo{' '}
+                      {short
+                        .map(
+                          (w) =>
+                            `${w.side === 'in' ? 'in' : 'out'} ${
+                              Number.isFinite(w.gradePct)
+                                ? w.gradePct.toFixed(0) + '%'
+                                : '∞'
+                            }`
+                        )
+                        .join(' · ')}{' '}
+                      — consigliati ≥ {minM} m (bordo ≤ 10%)
                     </div>
                   );
                 })()}

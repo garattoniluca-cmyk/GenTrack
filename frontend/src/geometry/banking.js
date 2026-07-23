@@ -148,6 +148,43 @@ export function buildBankingRoll(sampleCount, totalLength, corners, cornerBankin
   return buildProfileFromModel(sampleCount, model, 'Aroll');
 }
 
+/** Picco della derivata della smoothstep (a metà rampa). */
+const SMOOTHSTEP_PEAK = 1.5;
+
+/**
+ * VALIDAZIONE del tasso di torsione (D-027): una rampa troppo corta per
+ * l'angolo produce pendenze verticali violente ai bordi del tubo
+ * (bordo che sale/scende di arm·sin(A) in `ramp` metri, picco ×1.5 della
+ * smoothstep). Ritorna un warning per ogni rampa la cui pendenza di bordo
+ * supera maxEdgeGradePct: { origIndex, side, rampM, gradePct, minRampM }.
+ * Solo segnalazione — mai correzioni automatiche.
+ */
+export function bankingRampQuality(cornerBanking, section, maxEdgeGradePct = 10) {
+  const arm =
+    section.trackWidth / 2 + Math.max(section.grassLeft, section.grassRight);
+  const out = [];
+  for (const [idx, bk] of Object.entries(cornerBanking)) {
+    if (!bk || bk.angleDeg === 0) continue;
+    const sinA = Math.abs(Math.sin((bk.angleDeg * Math.PI) / 180));
+    const minRampM = Math.ceil((SMOOTHSTEP_PEAK * arm * sinA) / (maxEdgeGradePct / 100));
+    for (const [side, ramp] of [
+      ['in', bk.rampBefore ?? DEFAULT_BANK_RAMP],
+      ['out', bk.rampAfter ?? DEFAULT_BANK_RAMP],
+    ]) {
+      if (ramp < minRampM) {
+        out.push({
+          origIndex: Number(idx),
+          side,
+          rampM: ramp,
+          gradePct: ramp > 0 ? ((SMOOTHSTEP_PEAK * arm * sinA) / ramp) * 100 : Infinity,
+          minRampM,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 /**
  * Indicatori visivi del banking per la mappa: per ogni curva con bank,
  * i range in s di [rampa in | bank pieno | rampa out] e il LATO ESTERNO

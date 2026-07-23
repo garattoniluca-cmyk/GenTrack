@@ -4,6 +4,7 @@ import {
   buildBankingProfile,
   bankingIndicators,
   bankingConflicts,
+  bankingRampQuality,
   MAX_BANK_DEG,
 } from './banking.js';
 
@@ -146,6 +147,49 @@ describe('buildBankingProfile + bankingConflicts — NESSUN automatismo', () => 
     for (let i = 0; i < N; i++) {
       expect(Math.abs(out[(i + 1) % N] - out[i])).toBeLessThan(1.0);
     }
+  });
+});
+
+describe('bankingRampQuality (D-027: tasso di torsione)', () => {
+  const SECTION = { trackWidth: 12, lineWidth: 0.2, grassLeft: 8, grassRight: 8 };
+  // arm = 6 + 8 = 14 m
+
+  it('caso reale misurato: 25° con rampa 25 m → warning con numeri giusti', () => {
+    const q = bankingRampQuality(
+      { 3: { angleDeg: 25, rampBefore: 50, rampAfter: 25 } },
+      SECTION
+    );
+    // minRamp = ceil(1.5·14·sin25° / 0.10) = ceil(88.7) = 89 m → entrambe corte
+    expect(q).toHaveLength(2);
+    const out = q.find((w) => w.side === 'out');
+    expect(out.minRampM).toBe(89);
+    expect(out.gradePct).toBeGreaterThan(30); // bordo erba ~35%
+    const inn = q.find((w) => w.side === 'in');
+    expect(inn.rampM).toBe(50);
+  });
+
+  it('rampe adeguate: nessun warning (20° con 100 m)', () => {
+    const q = bankingRampQuality(
+      { 1: { angleDeg: 20, rampBefore: 100, rampAfter: 100 } },
+      SECTION
+    );
+    // minRamp = ceil(1.5·14·sin20°/0.10) = ceil(71.8) = 72 < 100
+    expect(q).toEqual([]);
+  });
+
+  it('rampa 0 con angolo ≠ 0: pendenza infinita segnalata', () => {
+    const q = bankingRampQuality(
+      { 2: { angleDeg: 10, rampBefore: 0, rampAfter: 100 } },
+      SECTION
+    );
+    expect(q).toHaveLength(1);
+    expect(q[0].gradePct).toBe(Infinity);
+  });
+
+  it('bank 0: mai warning', () => {
+    expect(
+      bankingRampQuality({ 5: { angleDeg: 0, rampBefore: 1, rampAfter: 1 } }, SECTION)
+    ).toEqual([]);
   });
 });
 
