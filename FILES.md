@@ -33,7 +33,7 @@
 | `spline.test.js` | 17 test sugli invarianti (rettilinei esatti, archi sul cerchio, lunghezza analitica, verso, clamp) | 2 | ✅ |
 | `frame.js` | Parallel-transport frame lungo la curva | 3B | ⏳ |
 | `channel.js` | Canali keyframe periodici (step/linear/smoothstep) — generico | 3A | 🧪 |
-| `trackNoise.js` | Altimetria: fBm periodico su cerchio, limite pendenza, spianamento start (D-022) | 3A | 🧪 |
+| `trackNoise.js` | Altimetria: campo fBm 2D z(x,y) ancorato a z=0 sul rettilineo di start (flatRadius), limite pendenza globale (D-025) | 3A | 🧪 |
 | `offset.js` | Bordi tubo: offset mezzeria (sinistra=+, ccw→interno) | 3A | 🧪 |
 | `curvature.js` | Stima curvatura + euristica velocità `v=sqrt(a_lat/κ)` | 5 (usata anche in 4) | ⏳ |
 | `sectionProfile.js` | Profili trasversali (wall_edge, secondary_surface), interpolazione | 3 | ⏳ |

@@ -135,6 +135,16 @@ altimetria) su http://localhost:5173. **84 test unitari verdi**.
       stessa fonte delle bande verdi del grafico) + rampe smoothstep di 250 m
       oltre i confini. Con flatten=1: z=0 esatto su TUTTO il rettilineo,
       salto pendenza max 0.93% (spigolo vero ~10%). 102 test verdi.
+- [x] 2026-07-23 — **Altimetria riscritta come CAMPO 2D z(x,y)** (D-025,
+      architettura dell'utente; il 1D lungo s aveva 2 difetti: appiattimento
+      a posteriori = spigoli su zone alte del rumore; rettilinei paralleli
+      vicini sulla mappa potevano divergere in quota → terreno Fase 6
+      incucibile). Il campo NASCE a z=0 sul segmento di start e cresce con
+      la distanza 2D (smoothstep 0→flatRadius, default 500 m); niente
+      routine di appiattimento; periodicità esatta gratis; `flattenStart`
+      sostituito da `flatRadius`. Test riscritti (coerenza spaziale: paralleli
+      a 25 m → Δz<8 m; z=0 esatto sul rettilineo; peso 0.5 esatto a metà
+      rampa). 100 verdi. Live: z≤2e-11 su 297 sample, Δpendenza max 0.29%.
 - [ ] Fase 3A: **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).

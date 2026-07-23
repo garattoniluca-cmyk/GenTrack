@@ -104,7 +104,7 @@
         },
         "elevationNoise": {
           "type": "object",
-          "description": "Parametri del rumore altimetrico periodico (D-022): z(s) è derivato deterministico da questi parametri, fBm simplex campionato su cerchio, ampiezza riscalata per rispettare maxSlopePct",
+          "description": "Altimetria = campo fBm 2D sulla MAPPA z(x,y) (D-025): punti vicini nel piano hanno quote simili (terreno procedurale sempre generabile dai bordi del tubo); il campo nasce a z=0 sul rettilineo di start e cresce con la distanza 2D dal segmento (smoothstep 0→flatRadius); ampiezza riscalata globalmente per rispettare maxSlopePct. Deterministico dal seed.",
           "properties": {
             "seed": { "type": "integer" },
             "amplitude": { "type": "number", "minimum": 0 },
@@ -113,7 +113,7 @@
             "persistence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
             "lacunarity": { "type": "number", "exclusiveMinimum": 1 },
             "maxSlopePct": { "type": "number", "exclusiveMinimum": 0 },
-            "flattenStart": { "type": "number", "minimum": 0, "maximum": 1 }
+            "flatRadius": { "type": "number", "minimum": 0, "default": 500 }
           }
         }
       }

@@ -53,7 +53,8 @@ const initialFlowTube = {
   // banking PER CURVA (D-024): { [indiceVertice]: {angleDeg, rampBefore, rampAfter} }
   // — bank costante lungo la curva, rampe smoothstep di ritorno a zero (m)
   cornerBanking: {},
-  // altimetria: parametri del rumore periodico (D-022) — z(s) è derivato puro
+  // altimetria: campo fBm 2D sulla mappa (D-025), ancorato a z=0 sul
+  // rettilineo di start — z è derivato puro dai parametri + geometria
   elevationNoise: {
     seed: 12345,
     amplitude: 50,
@@ -62,7 +63,7 @@ const initialFlowTube = {
     persistence: 0.5,
     lacunarity: 2.0,
     maxSlopePct: 10,
-    flattenStart: 0.6,
+    flatRadius: 500,
   },
 };
 

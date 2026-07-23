@@ -290,6 +290,28 @@ bank. Schema: `cornerBanking{idx: {angleDeg, rampBefore, rampAfter}}`.
 **Motivazione**: il banking è una proprietà della CURVA, non di ascisse
 astratte; l'editing sulla mappa lo lega a ciò che si vede.
 
+### D-025 — Altimetria = campo fBm 2D sulla mappa, ancorato al rettilineo
+**Data**: 2026-07-23 (architettura indicata dall'utente; sostituisce il
+meccanismo 1D di D-022 — il PRINCIPIO di D-022 resta: l'altimetria 3A è la
+verità del circuito)
+**Decisione**: z è un campo bidimensionale z(x,y) valutato nei punti del
+tracciato, NON un rumore 1D lungo s. Il campo nasce a z=0 sul segmento di
+start e cresce con la DISTANZA 2D da esso (smoothstep 0→`flatRadius`,
+default 500 m). Limite di pendenza: riscalo globale (invariato).
+**Motivazione (i due difetti del 1D, individuati dall'utente)**:
+1. l'appiattimento a posteriori del rettilineo poteva trovarsi a schiacciare
+   una zona "alta" del rumore → pendenze artificiali e spigoli;
+   col campo ancorato non esiste alcuna routine di appiattimento;
+2. il rumore 1D poteva assegnare quote divergenti a due rettilinei paralleli
+   VICINI sulla mappa (lontani in s) → terreno procedurale della Fase 6
+   impossibile da cucire dai bordi del tubo. Col campo 2D punti vicini nel
+   piano hanno quote simili per costruzione.
+**Bonus**: periodicità esatta gratis (s=0 e s=1 = stesso punto del piano);
+il futuro terreno può usare LO STESSO campo, coerenza totale.
+**Parametri**: `flattenStart` sostituito da `flatRadius` (m).
+**Verificato live**: 297 sample sul rettilineo con z ≤ 2e-11; salto di
+pendenza max 0.29% (spigolo vero ~10%).
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD

@@ -96,17 +96,27 @@ export default function App() {
     return { endS: first.sStart, beginS: last.sEnd };
   }, [resampled.corners]);
 
+  // segmento di start sulla MAPPA: ancora z=0 del campo altimetrico 2D (D-025)
+  const startSegWorld = useMemo(() => {
+    const pts = polygon.points;
+    if (polygon.startSegment == null || pts.length < 3) return null;
+    return {
+      a: pts[polygon.startSegment],
+      b: pts[(polygon.startSegment + 1) % pts.length],
+    };
+  }, [polygon.points, polygon.startSegment]);
+
   const elevation = useMemo(
     () =>
       resampled.sampleCount >= 2
         ? buildElevation(
-            resampled.sampleCount,
+            resampled.samples,
             resampled.totalLength,
             flowTube.elevationNoise,
-            startStraight
+            startSegWorld
           )
         : null,
-    [resampled.sampleCount, resampled.totalLength, flowTube.elevationNoise, startStraight]
+    [resampled.samples, resampled.sampleCount, resampled.totalLength, flowTube.elevationNoise, startSegWorld]
   );
   const bankingProfile = useMemo(
     () =>
@@ -364,7 +374,7 @@ export default function App() {
                   ['persistence', 'Persistenza', 0.1, 0.05],
                   ['lacunarity', 'Lacunarità', 1.1, 0.1],
                   ['maxSlopePct', 'Pendenza max (%)', 0.5, 0.5],
-                  ['flattenStart', 'Spianam. start (0-1)', 0, 0.1],
+                  ['flatRadius', 'Raggio piana start (m)', 0, 50],
                 ].map(([key, label, min, step]) => (
                   <label key={key} className="param-row">
                     {label}

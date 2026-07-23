@@ -1,9 +1,29 @@
-// Test invarianti trackNoise.js — vedi TESTING.md
+// Test invarianti trackNoise.js (campo 2D, D-025) — vedi TESTING.md
 import { describe, it, expect } from 'vitest';
 import { buildElevation, mulberry32 } from './trackNoise.js';
+import { resampleFilletPath } from './spline.js';
 
-const N = 1000;
-const LEN = 5000; // m
+const P = (x, y) => ({ x, y });
+
+// path realistico: quadrato 2000×2000 con stondature da 100 m, start sul
+// lato basso (segmento (0,0)→(2000,0)), percorrenza ccw
+const square = [P(0, 0), P(2000, 0), P(2000, 2000), P(0, 2000)];
+const START_SEG = { a: square[0], b: square[1] };
+const path = resampleFilletPath(square, 0, 'ccw', {}, 100);
+const N = path.sampleCount;
+const LEN = path.totalLength;
+const ds = LEN / N;
+
+const BASE = {
+  seed: 7,
+  amplitude: 50,
+  wavelength: 2500,
+  octaves: 2,
+  persistence: 0.5,
+  lacunarity: 2,
+  maxSlopePct: 10,
+  flatRadius: 500,
+};
 
 describe('mulberry32', () => {
   it('deterministico e in [0,1)', () => {
@@ -18,125 +38,91 @@ describe('mulberry32', () => {
   });
 });
 
-describe('buildElevation', () => {
-  const params = { seed: 7, amplitude: 25, wavelength: 800, maxSlopePct: 10, flattenStart: 0 };
-  const res = buildElevation(N, LEN, params);
+describe('buildElevation (campo 2D)', () => {
+  const res = buildElevation(path.samples, LEN, BASE, START_SEG);
 
-  it('stesso seed → output identico (determinismo)', () => {
-    const res2 = buildElevation(N, LEN, params);
-    expect(res2.z).toEqual(res.z);
+  it('stesso seed → output identico; seed diverso → diverso', () => {
+    expect(buildElevation(path.samples, LEN, BASE, START_SEG).z).toEqual(res.z);
+    expect(buildElevation(path.samples, LEN, { ...BASE, seed: 8 }, START_SEG).z).not.toEqual(res.z);
   });
 
-  it('seed diverso → output diverso', () => {
-    const other = buildElevation(N, LEN, { ...params, seed: 8 });
-    expect(other.z).not.toEqual(res.z);
-  });
-
-  it('PERIODICO: nessun salto al raccordo s=1→s=0', () => {
-    const ds = LEN / N;
-    const wrapSlope = Math.abs(res.z[0] - res.z[N - 1]) / ds;
-    expect(wrapSlope).toBeLessThanOrEqual(0.1 + 1e-9); // entro il limite di pendenza
-  });
-
-  it('DERIVABILITÀ discreta: pendenza ovunque entro il limite', () => {
-    const ds = LEN / N;
+  it('z = 0 ESATTO su tutto il rettilineo di start (nessun appiattimento a posteriori: il campo nasce piatto lì)', () => {
+    let onStraight = 0;
     for (let i = 0; i < N; i++) {
-      const slope = Math.abs(res.z[(i + 1) % N] - res.z[i]) / ds;
-      expect(slope).toBeLessThanOrEqual(0.1 + 1e-9);
+      const pt = path.samples[i];
+      if (Math.abs(pt.y) < 1e-9 && pt.x >= -1e-9 && pt.x <= 2000 + 1e-9) {
+        expect(Math.abs(res.z[i])).toBeLessThan(1e-12);
+        onStraight++;
+      }
+    }
+    expect(onStraight).toBeGreaterThan(50); // il rettilineo è campionato davvero
+  });
+
+  it('PERIODICITÀ esatta: s=0 e s=1 sono lo stesso punto del piano', () => {
+    // il path chiude su startMid: primo e ultimo sample sono sul rettilineo → z=0
+    expect(Math.abs(res.z[0])).toBeLessThan(1e-12);
+    const wrapSlope = Math.abs(res.z[0] - res.z[N - 1]) / ds;
+    expect(wrapSlope).toBeLessThanOrEqual(0.1 + 1e-9);
+  });
+
+  it('CONTINUITÀ e DERIVABILITÀ lungo il path: pendenza nel limite, niente spigoli', () => {
+    const slope = (i) => (res.z[(i + 1) % N] - res.z[i]) / ds;
+    for (let i = 0; i < N; i++) {
+      expect(Math.abs(res.z[(i + 1) % N] - res.z[i])).toBeLessThanOrEqual(0.1 * ds + 1e-9);
+      // salto di pendenza tra sample: uno spigolo vero sarebbe ~10%
+      expect(Math.abs(slope((i + 1) % N) - slope(i))).toBeLessThan(0.03);
     }
     expect(res.stats.maxSlopePct).toBeLessThanOrEqual(10 + 1e-6);
   });
 
-  it('limite di pendenza più severo → ampiezza ridotta di conseguenza', () => {
-    const strict = buildElevation(N, LEN, { ...params, maxSlopePct: 2 });
-    expect(strict.stats.maxSlopePct).toBeLessThanOrEqual(2 + 1e-6);
-    expect(strict.stats.maxZ - strict.stats.minZ).toBeLessThan(
-      res.stats.maxZ - res.stats.minZ + 1e-9
-    );
+  it('COERENZA SPAZIALE: punti vicini sulla mappa → quote vicine, anche se lontani lungo s', () => {
+    // due rettilinei paralleli a 25 m: andata (y=0) e ritorno (y=25),
+    // agli antipodi nel dominio s ma adiacenti nel piano
+    const samples = [];
+    for (let i = 0; i < 100; i++) samples.push(P(1000 + i * 20, 0));
+    for (let i = 0; i < 100; i++) samples.push(P(1000 + (99 - i) * 20, 25));
+    const out = buildElevation(samples, 4000, { ...BASE, maxSlopePct: 1e6 }, null);
+    let maxDiff = 0;
+    let range = { min: Infinity, max: -Infinity };
+    for (let i = 0; i < 100; i++) {
+      const j = 199 - i; // stesso x, y=25
+      maxDiff = Math.max(maxDiff, Math.abs(out.z[i] - out.z[j]));
+      range.min = Math.min(range.min, out.z[i]);
+      range.max = Math.max(range.max, out.z[i]);
+    }
+    expect(maxDiff).toBeLessThan(8); // 25 m di distanza → pochi metri di differenza
+    expect(range.max - range.min).toBeGreaterThan(10); // ma il campo NON è banale
   });
 
-  it('baseline: media ≈ 0 (senza spianamento)', () => {
-    const mean = res.z.reduce((a, b) => a + b, 0) / N;
-    expect(Math.abs(mean)).toBeLessThan(0.5);
+  it('flatRadius: a metà rampa il campo pesa smoothstep(0.5) = 0.5 esatto', () => {
+    // punto a 250 m dal segmento di start, flatRadius 500
+    const pts = [P(1000, 250), P(1010, 250), P(1020, 250)];
+    const withSeg = buildElevation(pts, 30, { ...BASE, maxSlopePct: 1e6 }, START_SEG);
+    const noSeg = buildElevation(pts, 30, { ...BASE, maxSlopePct: 1e6 }, null);
+    expect(withSeg.z[0]).toBeCloseTo(noSeg.z[0] * 0.5, 9);
   });
 
-  it('spianamento start: z(s=0) esattamente 0 con flattenStart=1', () => {
-    const flat = buildElevation(N, LEN, { ...params, flattenStart: 1 });
-    expect(Math.abs(flat.z[0])).toBeLessThan(1e-9);
-    // e la zona attorno allo start è più piatta del resto
-    const nearMax = Math.max(
-      ...[0, 1, 2, N - 2, N - 1].map((i) => Math.abs(flat.z[i]))
-    );
-    const globalMax = Math.max(...flat.z.map(Math.abs));
-    expect(nearMax).toBeLessThan(globalMax * 0.3);
-  });
-
-  it('ampiezza maggiore → escursione maggiore (sotto il limite)', () => {
-    // parametri dolci per non attivare il riscalo
-    const soft = { seed: 7, wavelength: 3000, octaves: 2, maxSlopePct: 20, flattenStart: 0 };
-    const a = buildElevation(N, LEN, { ...soft, amplitude: 5 });
-    const b = buildElevation(N, LEN, { ...soft, amplitude: 15 });
+  it('ampiezza lineare: 3× ampiezza → 3× escursione (senza riscalo)', () => {
+    const soft = { ...BASE, maxSlopePct: 1e6 };
+    const a = buildElevation(path.samples, LEN, { ...soft, amplitude: 5 }, null);
+    const b = buildElevation(path.samples, LEN, { ...soft, amplitude: 15 }, null);
     expect(a.stats.amplitudeScale).toBe(1);
-    expect(b.stats.maxZ - b.stats.minZ).toBeGreaterThan(a.stats.maxZ - a.stats.minZ);
+    expect(b.stats.maxZ - b.stats.minZ).toBeCloseTo(3 * (a.stats.maxZ - a.stats.minZ), 6);
   });
 
-  it('gain: somma delle salite > 0 e chiusura del giro coerente', () => {
+  it('limite di pendenza più severo → rispettato via riscalo globale', () => {
+    const strict = buildElevation(path.samples, LEN, { ...BASE, maxSlopePct: 2 }, START_SEG);
+    expect(strict.stats.maxSlopePct).toBeLessThanOrEqual(2 + 1e-6);
+    // il riscalo è globale: il rettilineo resta a 0
+    expect(Math.abs(strict.z[0])).toBeLessThan(1e-12);
+  });
+
+  it('gain: somma delle salite > 0', () => {
     expect(res.stats.gain).toBeGreaterThan(0);
   });
 
-  it('flattenStart=1: profilo CONTINUO e DERIVABILE, niente spike né spigoli', () => {
-    const ds = LEN / N;
-    for (const seed of [1, 7, 42, 12345, 999983]) {
-      const { z } = buildElevation(N, LEN, {
-        seed,
-        amplitude: 50,
-        wavelength: 2500,
-        octaves: 2,
-        maxSlopePct: 10,
-        flattenStart: 1,
-      });
-      const slope = (i) => (z[(i + 1) % N] - z[i]) / ds;
-      for (let i = 0; i < N; i++) {
-        // continuità: salto tra sample ≤ pendenza massima consentita
-        expect(Math.abs(z[(i + 1) % N] - z[i])).toBeLessThanOrEqual(0.1 * ds + 1e-9);
-        // derivabilità discreta: la PENDENZA non salta (uno spigolo vero
-        // avrebbe Δslope ~ 10%; misurato smooth ≈ 0.24% — soglia 1%)
-        expect(Math.abs(slope((i + 1) % N) - slope(i))).toBeLessThan(0.01);
-      }
-      // dentro la finestra di spianamento pieno z = 0 esatto, senza gradino
-      expect(Math.abs(z[0])).toBeLessThan(1e-9);
-      expect(Math.abs(z[1])).toBeLessThan(1e-9);
-      expect(Math.abs(z[N - 1])).toBeLessThan(1e-9);
-    }
-  });
-
-  it('spianamento=1 con rettilineo REALE: piatto su TUTTO il rettilineo, senza spigoli', () => {
-    const ds = LEN / N;
-    // rettilineo che wrappa attorno a s=0: da 0.85 a 0.10 (25% del giro)
-    const straight = { beginS: 0.85, endS: 0.1 };
-    for (const seed of [1, 42, 12345]) {
-      const { z } = buildElevation(
-        N,
-        LEN,
-        { seed, amplitude: 150, wavelength: 2500, octaves: 1, maxSlopePct: 10, flattenStart: 1 },
-        straight
-      );
-      const slope = (i) => (z[(i + 1) % N] - z[i]) / ds;
-      for (let i = 0; i < N; i++) {
-        const s = i / N;
-        // dentro il rettilineo: PIATTO esatto
-        if (s >= straight.beginS || s <= straight.endS) {
-          expect(Math.abs(z[i])).toBeLessThan(1e-9);
-        }
-        // ovunque: continuo e derivabile (niente spike/spigoli ai confini)
-        expect(Math.abs(z[(i + 1) % N] - z[i])).toBeLessThanOrEqual(0.1 * ds + 1e-9);
-        expect(Math.abs(slope((i + 1) % N) - slope(i))).toBeLessThan(0.012);
-      }
-    }
-  });
-
   it('input non validi → vuoto', () => {
-    expect(buildElevation(1, LEN).z).toEqual([]);
-    expect(buildElevation(N, 0).z).toEqual([]);
+    expect(buildElevation([P(0, 0)], LEN).z).toEqual([]);
+    expect(buildElevation(path.samples, 0).z).toEqual([]);
   });
 });
