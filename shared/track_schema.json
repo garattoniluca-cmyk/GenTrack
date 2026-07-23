@@ -32,18 +32,24 @@
 
     "stage2_spline": {
       "type": "object",
-      "description": "Mezzeria = rettilinei del poligono + raccordi ad arco per-vertice (D-018). s=0 a metà del segmento start, s cresce nel verso di percorrenza.",
+      "description": "Mezzeria = rettilinei del poligono + stondature asimmetriche a due bracci (Bézier quadratica tangente, D-021). s=0 a metà del segmento start, s cresce nel verso di percorrenza.",
       "properties": {
-        "defaultCornerRadius": {
+        "defaultArmLength": {
           "type": "number",
           "exclusiveMinimum": 0,
           "default": 60,
-          "description": "Raggio di default dei raccordi (m)"
+          "description": "Braccio di default delle stondature (m)"
         },
-        "cornerRadii": {
+        "cornerArms": {
           "type": "object",
-          "description": "Override per-vertice: chiave = indice vertice stage1, valore = raggio (m). Il raggio effettivo è clampato dalla lunghezza degli spigoli adiacenti.",
-          "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+          "description": "Override per-vertice: chiave = indice vertice stage1, valore = {in, out} in metri ('in' = braccio prima del vertice nel verso di percorrenza, 'out' = dopo). Bracci clampati a metà dello spigolo corrispondente.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "in": { "type": "number", "exclusiveMinimum": 0 },
+              "out": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
         },
         "resampledArcLength": {
           "type": "object",

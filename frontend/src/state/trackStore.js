@@ -42,8 +42,11 @@ export const computeStage1Fingerprint = (stage1) =>
   JSON.stringify([stage1.points, stage1.startSegment, stage1.direction]);
 
 const initialSpline = {
-  defaultRadius: 60, // raggio di default dei raccordi (m)
-  radii: {}, // override per-vertice: { [indiceVerticeOriginale]: raggio }
+  defaultArm: 60, // braccio di default delle stondature (m)
+  // override per-vertice: { [indiceVerticeOriginale]: {in: metri, out: metri} }
+  // "in" = braccio sullo spigolo PRIMA del vertice (verso di percorrenza),
+  // "out" = braccio sullo spigolo DOPO — bracci diversi = stondatura asimmetrica
+  arms: {},
   sourceFingerprint: null, // impronta dello stage1 da cui deriva il path
 };
 
@@ -199,7 +202,7 @@ export const useTrackStore = create(
 
       /**
        * Allinea la Fase 2 al poligono di Fase 1. Se l'impronta dello stage1 è
-       * cambiata (o force=true) i raggi override vengono azzerati (gli indici
+       * cambiata (o force=true) i bracci override vengono azzerati (gli indici
        * dei vertici non sono più affidabili); altrimenti non fa nulla.
        */
       generateSplineFromPolygon: (force = false) => {
@@ -208,36 +211,44 @@ export const useTrackStore = create(
         const fp = computeStage1Fingerprint(stage1Polygon);
         if (!force && stage2Spline.sourceFingerprint === fp) return;
         set({
-          stage2Spline: { ...stage2Spline, radii: {}, sourceFingerprint: fp },
+          stage2Spline: { ...stage2Spline, arms: {}, sourceFingerprint: fp },
         });
       },
 
-      /** Raggio di default dei raccordi (m). */
-      setDefaultCornerRadius: (v) => {
+      /** Braccio di default delle stondature (m). */
+      setDefaultArm: (v) => {
         if (!(v >= 1)) return;
         const { stage2Spline } = get();
-        set({ stage2Spline: { ...stage2Spline, defaultRadius: v } });
+        set({ stage2Spline: { ...stage2Spline, defaultArm: v } });
       },
 
-      /** Raggio override della curva sul vertice `origIndex`. */
-      setCornerRadius: (origIndex, radius) => {
-        if (!(radius >= 1)) return;
+      /**
+       * Imposta un braccio della curva sul vertice `origIndex`.
+       * side: 'in' (prima del vertice) | 'out' (dopo il vertice).
+       */
+      setCornerArm: (origIndex, side, len) => {
+        if (side !== 'in' && side !== 'out') return;
+        if (!(len >= 1)) return;
         const { stage2Spline } = get();
+        const prev = stage2Spline.arms[origIndex] ?? {};
         set({
           stage2Spline: {
             ...stage2Spline,
-            radii: { ...stage2Spline.radii, [origIndex]: Math.round(radius) },
+            arms: {
+              ...stage2Spline.arms,
+              [origIndex]: { ...prev, [side]: Math.round(len) },
+            },
           },
         });
       },
 
-      /** Rimuove l'override: la curva torna al raggio di default. */
-      resetCornerRadius: (origIndex) => {
+      /** Rimuove gli override: la curva torna ai bracci di default. */
+      resetCornerArms: (origIndex) => {
         const { stage2Spline } = get();
-        if (!(origIndex in stage2Spline.radii)) return;
-        const radii = { ...stage2Spline.radii };
-        delete radii[origIndex];
-        set({ stage2Spline: { ...stage2Spline, radii } });
+        if (!(origIndex in stage2Spline.arms)) return;
+        const arms = { ...stage2Spline.arms };
+        delete arms[origIndex];
+        set({ stage2Spline: { ...stage2Spline, arms } });
       },
 
       /**

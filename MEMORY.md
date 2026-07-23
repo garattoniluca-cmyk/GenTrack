@@ -82,7 +82,14 @@ Editor poligonale (Fase 1) + editor spline (Fase 2) su http://localhost:5173.
       è bloccato in silenzio nel pannello preview → la conferma di
       rigenerazione inghiottiva il click. Sostituito con modale interna React.
       Regola: mai dialog nativi del browser nell'app.
-- [ ] Fase 2 (fillet): **validazione visiva/interattiva dell'utente** in corso.
+- [x] 2026-07-23 — **Stondature asimmetriche a due bracci** (D-021): braccio
+      `in` (prima del vertice) e `out` (dopo) indipendenti; Bézier quadratica
+      tangente (C1); due maniglie per curva + guide; etichetta R~ (raggio
+      minimo); braccio default 60 m in toolbar. Schema stage2 aggiornato:
+      {defaultArmLength, cornerArms{in,out}}. 58 test verdi.
+- [ ] Fase 2 (bracci asimmetrici): **validazione utente** in corso.
+- ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
+      valutare di anticipare import/export JSON (persistenza locale).
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —
       collaudo via `window.__trackStore` + verifica interattiva manuale.

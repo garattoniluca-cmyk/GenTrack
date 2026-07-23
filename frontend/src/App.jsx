@@ -61,15 +61,15 @@ export default function App() {
         polygon.points,
         polygon.startSegment,
         polygon.direction,
-        spline.radii,
-        spline.defaultRadius
+        spline.arms,
+        spline.defaultArm
       ),
     [
       polygon.points,
       polygon.startSegment,
       polygon.direction,
-      spline.radii,
-      spline.defaultRadius,
+      spline.arms,
+      spline.defaultArm,
     ]
   );
   const curveCount = useMemo(
@@ -97,7 +97,7 @@ export default function App() {
     const st = useTrackStore.getState();
     const fp = computeStage1Fingerprint(st.stage1Polygon);
     const hasEdits =
-      Object.keys(st.stage2Spline.radii).length > 0 &&
+      Object.keys(st.stage2Spline.arms).length > 0 &&
       st.stage2Spline.sourceFingerprint != null &&
       st.stage2Spline.sourceFingerprint !== fp;
     if (hasEdits) {
@@ -155,15 +155,15 @@ export default function App() {
         </div>
 
         {phase === 2 && (
-          <label title="Raggio di default dei raccordi di curva">
-            Raggio curve (m)
+          <label title="Braccio di default delle stondature (distanza dei punti di tangenza dal vertice)">
+            Braccio curve (m)
             <input
               type="number"
               min="5"
               step="5"
-              value={spline.defaultRadius}
+              value={spline.defaultArm}
               onChange={(e) =>
-                useTrackStore.getState().setDefaultCornerRadius(parseFloat(e.target.value))
+                useTrackStore.getState().setDefaultArm(parseFloat(e.target.value))
               }
             />
           </label>
@@ -276,8 +276,8 @@ export default function App() {
               <pre>
                 {JSON.stringify(
                   {
-                    defaultCornerRadius: spline.defaultRadius,
-                    cornerRadii: spline.radii,
+                    defaultArmLength: spline.defaultArm,
+                    cornerArms: spline.arms,
                     resampledArcLength: {
                       totalLength: Math.round(resampled.totalLength * 10) / 10,
                       sampleCount: resampled.sampleCount,
@@ -291,9 +291,10 @@ export default function App() {
               <div className="hints">
                 <h3>Comandi</h3>
                 <ul>
-                  <li><b>Drag sulla maniglia di curva</b> — cambia raggio</li>
-                  <li><b>Tasto destro sulla maniglia</b> — reimposta default</li>
-                  <li>Maniglia <b>gialla</b> = raggio personalizzato</li>
+                  <li><b>Drag su una maniglia</b> — allunga/accorcia quel braccio</li>
+                  <li>Due maniglie per curva: <b>prima</b> e <b>dopo</b> il vertice — bracci diversi = curva asimmetrica</li>
+                  <li><b>Tasto destro su una maniglia</b> — reimposta default</li>
+                  <li>Maniglia <b>gialla</b> = braccio personalizzato</li>
                   <li><b>Rotellina</b> — zoom</li>
                   <li><b>Space + drag</b> / rotellina premuta — pan</li>
                 </ul>
@@ -310,8 +311,8 @@ export default function App() {
             <p>
               Il poligono è cambiato dall'ultima sessione di Fase 2.
               <br />
-              I <b>raggi personalizzati</b> delle curve verranno reimpostati al
-              default ({useTrackStore.getState().stage2Spline.defaultRadius} m).
+              I <b>bracci personalizzati</b> delle curve verranno reimpostati al
+              default ({useTrackStore.getState().stage2Spline.defaultArm} m).
             </p>
             <div className="modal-actions">
               <button onClick={() => setConfirmRegenOpen(false)}>Annulla</button>
@@ -367,8 +368,8 @@ export default function App() {
           <>
             <span>
               Curve: <b>{curveCount}</b>
-              {Object.keys(spline.radii).length > 0 && (
-                <> ({Object.keys(spline.radii).length} personalizzate)</>
+              {Object.keys(spline.arms).length > 0 && (
+                <> ({Object.keys(spline.arms).length} personalizzate)</>
               )}
             </span>
             <span>
@@ -381,7 +382,7 @@ export default function App() {
               🏁 s = 0 sullo start ·{' '}
               {polygon.direction === 'cw' ? 'orario ⟳' : 'antiorario ⟲'}
             </span>
-            <span className="dim">● rettilinei esatti + archi C1</span>
+            <span className="dim">● rettilinei esatti + stondature C1</span>
           </>
         )}
       </footer>

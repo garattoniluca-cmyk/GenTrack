@@ -1,25 +1,27 @@
-// spline.js — Fase 2: mezzeria del circuito = RETTILINEI del poligono +
-// RACCORDI AD ARCO tangenti agli angoli (fillet), con raggio per-curva.
+// spline.js — Fase 2: mezzeria = RETTILINEI del poligono + STONDATURE
+// ASIMMETRICHE agli angoli.
 //
-// Sostituisce la Catmull-Rom pura (D-018): una spline passante per i vertici
-// arrotondava tutto, distruggendo i rettilinei. Qui i rettilinei restano
-// esatti al millimetro e ogni curva è un arco di raggio costante e regolabile
-// — come nella progettazione reale dei circuiti. Continuità C1 garantita per
-// costruzione (archi tangenti alle rette).
+// Ogni curva è definita da DUE BRACCI indipendenti (D-021):
+//   - braccio IN  (t1): distanza dal vertice lungo lo spigolo PRIMA del vertice
+//   - braccio OUT (t2): distanza dal vertice lungo lo spigolo DOPO il vertice
+// La curva è una Bézier QUADRATICA con controllo sul vertice:
+//   B(u) = (1−u)²·T1 + 2u(1−u)·V + u²·T2,  T1 = V + d1·t1, T2 = V + d2·t2
+// Tangente in T1 diretta come lo spigolo in ingresso e in T2 come quello in
+// uscita → continuità C1 con i rettilinei per costruzione. Con t1 = t2 la
+// stondatura è simmetrica; con bracci diversi si controllano ingresso e
+// uscita di curva separatamente. Il raggio non è costante: si riporta il
+// raggio MINIMO (R~) come riferimento.
 //
-// Convenzioni:
-// - points: vertici del poligono di Fase 1 (ordine di disegno)
-// - la percorrenza parte dalla METÀ del segmento start (s=0) e segue il
-//   verso scelto ('cw'/'ccw')
-// - radii: { [indiceVerticeOriginale]: raggioMetri } override per-curva
-// - output samples: [{t, s, x, y}] con s = arc-length normalizzato [0,1)
-//   e t = frazione lineare lungo il path (qui coincide con s)
+// I rettilinei restano ESATTI (2 punti). s=0 a metà del segmento start,
+// s cresce nel verso di percorrenza.
 
 import { dist, signedArea } from './polygon.js';
 
 const EPS = 1e-9;
-/** Angolo (rad) oltre il quale un vertice è considerato collineare: nessun arco. */
+/** Angolo (rad) oltre il quale un vertice è considerato collineare: nessuna curva. */
 const COLLINEAR_EPS = 0.02;
+/** Braccio minimo (m). */
+export const MIN_ARM = 2;
 
 const norm = (v) => {
   const l = Math.hypot(v.x, v.y) || 1;
@@ -29,7 +31,7 @@ const norm = (v) => {
 /**
  * Vertici nell'ordine di percorrenza: il primo è il vertice di FINE del
  * segmento start (il primo incontrato viaggiando da s=0), l'ultimo è quello
- * di inizio. Ogni vertice porta il suo indice originale (per i raggi).
+ * di inizio. Ogni vertice porta il suo indice originale (per i bracci).
  */
 export function travelOrderedVertices(points, startSegment, direction) {
   const n = points.length;
@@ -50,71 +52,86 @@ export function travelOrderedVertices(points, startSegment, direction) {
   return out;
 }
 
+/** Punto sulla Bézier quadratica del raccordo. */
+export function cornerBezierPoint(T1, V, T2, u) {
+  const a = (1 - u) * (1 - u);
+  const b = 2 * u * (1 - u);
+  const c = u * u;
+  return {
+    x: a * T1.x + b * V.x + c * T2.x,
+    y: a * T1.y + b * V.y + c * T2.y,
+  };
+}
+
+/** Raggio minimo della Bézier quadratica (campionamento della curvatura). */
+function bezierMinRadius(T1, V, T2, steps = 32) {
+  // B'(u) = 2[(1−u)(V−T1) + u(T2−V)];  B'' = 2[T1 − 2V + T2] (costante)
+  const ax = 2 * (T1.x - 2 * V.x + T2.x);
+  const ay = 2 * (T1.y - 2 * V.y + T2.y);
+  let maxK = 0;
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps;
+    const dx = 2 * ((1 - u) * (V.x - T1.x) + u * (T2.x - V.x));
+    const dy = 2 * ((1 - u) * (V.y - T1.y) + u * (T2.y - V.y));
+    const speed2 = dx * dx + dy * dy;
+    if (speed2 < EPS) continue;
+    const k = Math.abs(dx * ay - dy * ax) / Math.pow(speed2, 1.5);
+    if (k > maxK) maxK = k;
+  }
+  return maxK > EPS ? 1 / maxK : Infinity;
+}
+
 /**
- * Calcola i raccordi ad arco per ogni vertice (in ordine di percorrenza).
- * Per il vertice V con precedente P e successivo N:
- *   d1 = direzione V→P, d2 = direzione V→N, φ = angolo interno
- *   t  = R / tan(φ/2)   (distanza dei punti di tangenza da V)
- *   C  = V + bisettrice · R / sin(φ/2)
- * Il raggio richiesto viene CLAMPATO perché t non superi metà degli spigoli
- * adiacenti (maxR): raggi enormi su spigoli corti si riducono da soli.
+ * Calcola le stondature per ogni vertice (in ordine di percorrenza).
+ * arms: { [indiceVerticeOriginale]: {in: metri, out: metri} } override.
+ * I bracci sono clampati a metà dello spigolo corrispondente (0.49): bracci
+ * enormi su spigoli corti si riducono da soli.
+ * ATTENZIONE ai versi: "in" = spigolo di provenienza NEL VERSO DI PERCORRENZA,
+ * "out" = spigolo successivo.
  */
-export function computeCorners(points, startSegment, direction, radii = {}, defaultRadius = 60) {
+export function computeCorners(points, startSegment, direction, arms = {}, defaultArm = 60) {
   const verts = travelOrderedVertices(points, startSegment, direction);
   const n = verts.length;
   return verts.map((V, i) => {
-    const P = verts[(i - 1 + n) % n];
-    const N = verts[(i + 1) % n];
-    const d1 = norm({ x: P.x - V.x, y: P.y - V.y });
-    const d2 = norm({ x: N.x - V.x, y: N.y - V.y });
+    const P = verts[(i - 1 + n) % n]; // vertice precedente (nel verso)
+    const N = verts[(i + 1) % n]; // vertice successivo
+    const d1 = norm({ x: P.x - V.x, y: P.y - V.y }); // verso lo spigolo IN
+    const d2 = norm({ x: N.x - V.x, y: N.y - V.y }); // verso lo spigolo OUT
     const cosPhi = Math.max(-1, Math.min(1, d1.x * d2.x + d1.y * d2.y));
     const phi = Math.acos(cosPhi);
 
     if (phi > Math.PI - COLLINEAR_EPS) {
-      // quasi collineare: nessun arco, si passa per il vertice
-      return { origIndex: V.origIndex, V, skip: true, R: 0 };
+      return { origIndex: V.origIndex, V, skip: true };
     }
 
-    const sinHalf = Math.sin(phi / 2);
-    const tanHalf = Math.tan(phi / 2);
     const lenIn = dist(P, V);
     const lenOut = dist(V, N);
-    const maxT = 0.49 * Math.min(lenIn, lenOut);
-    const maxR = maxT * tanHalf;
+    const maxT1 = 0.49 * lenIn;
+    const maxT2 = 0.49 * lenOut;
 
-    const requestedR = Math.max(1, radii[V.origIndex] ?? defaultRadius);
-    const R = Math.min(requestedR, maxR);
-    const t = R / tanHalf;
+    const o = arms[V.origIndex] ?? {};
+    const t1 = Math.min(Math.max(MIN_ARM, o.in ?? defaultArm), maxT1);
+    const t2 = Math.min(Math.max(MIN_ARM, o.out ?? defaultArm), maxT2);
 
-    const bis = norm({ x: d1.x + d2.x, y: d1.y + d2.y });
-    const C = { x: V.x + (bis.x * R) / sinHalf, y: V.y + (bis.y * R) / sinHalf };
-    const T1 = { x: V.x + d1.x * t, y: V.y + d1.y * t };
-    const T2 = { x: V.x + d2.x * t, y: V.y + d2.y * t };
-
-    const a1 = Math.atan2(T1.y - C.y, T1.x - C.x);
-    const a2 = Math.atan2(T2.y - C.y, T2.x - C.x);
-    let sweep = a2 - a1;
-    while (sweep > Math.PI) sweep -= 2 * Math.PI;
-    while (sweep < -Math.PI) sweep += 2 * Math.PI;
-
-    const midAng = a1 + sweep / 2;
-    const arcMid = { x: C.x + Math.cos(midAng) * R, y: C.y + Math.sin(midAng) * R };
+    const T1 = { x: V.x + d1.x * t1, y: V.y + d1.y * t1 };
+    const T2 = { x: V.x + d2.x * t2, y: V.y + d2.y * t2 };
+    const minR = bezierMinRadius(T1, V, T2);
+    const mid = cornerBezierPoint(T1, V, T2, 0.5);
 
     return {
       origIndex: V.origIndex,
       V,
       skip: false,
-      R,
-      requestedR,
-      maxR,
-      bis,
-      sinHalf,
-      C,
+      d1,
+      d2,
+      t1,
+      t2,
+      maxT1,
+      maxT2,
       T1,
       T2,
-      a1,
-      sweep,
-      arcMid,
+      minR,
+      mid,
     };
   });
 }
@@ -122,7 +139,7 @@ export function computeCorners(points, startSegment, direction, radii = {}, defa
 /**
  * Path completo della mezzeria + ricampionamento arc-length equidistante.
  * Il path parte e chiude su startMid (metà del segmento start): s=0 lì.
- * I rettilinei sono ESATTI (2 punti), gli archi campionati ogni ~2 m.
+ * Rettilinei ESATTI (2 punti); curve Bézier campionate ogni ~2 m.
  *
  * Ritorna { totalLength, sampleCount, samples, corners, startMid }.
  */
@@ -130,8 +147,8 @@ export function resampleFilletPath(
   points,
   startSegment,
   direction,
-  radii = {},
-  defaultRadius = 60,
+  arms = {},
+  defaultArm = 60,
   { spacing = 5, minCount = 200, maxCount = 2000 } = {}
 ) {
   const n = points?.length ?? 0;
@@ -142,9 +159,8 @@ export function resampleFilletPath(
   const B = points[(startSegment + 1) % n];
   const startMid = { x: (A.x + B.x) / 2, y: (A.y + B.y) / 2 };
 
-  const corners = computeCorners(points, startSegment, direction, radii, defaultRadius);
+  const corners = computeCorners(points, startSegment, direction, arms, defaultArm);
 
-  // costruzione del path denso: startMid → [rettilineo, arco]* → startMid
   const dense = [{ x: startMid.x, y: startMid.y }];
   const push = (p) => {
     const last = dense[dense.length - 1];
@@ -155,17 +171,15 @@ export function resampleFilletPath(
       push(c.V);
       continue;
     }
-    push(c.T1); // rettilineo fino al punto di tangenza (esatto: 2 punti)
-    const arcLen = Math.abs(c.sweep) * c.R;
-    const steps = Math.max(8, Math.ceil(arcLen / 2));
+    push(c.T1); // rettilineo fino all'inizio della stondatura
+    const estLen = (dist(c.T1, c.V) + dist(c.V, c.T2) + dist(c.T1, c.T2)) / 2;
+    const steps = Math.max(8, Math.ceil(estLen / 2));
     for (let k = 1; k <= steps; k++) {
-      const ang = c.a1 + c.sweep * (k / steps);
-      push({ x: c.C.x + Math.cos(ang) * c.R, y: c.C.y + Math.sin(ang) * c.R });
+      push(cornerBezierPoint(c.T1, c.V, c.T2, k / steps));
     }
   }
   push(startMid); // chiusura lungo il rettilineo di start
 
-  // tabella lunghezze cumulative + inversione per sample equidistanti
   const cum = [0];
   for (let k = 1; k < dense.length; k++) {
     cum.push(cum[k - 1] + dist(dense[k - 1], dense[k]));
@@ -195,14 +209,4 @@ export function resampleFilletPath(
     });
   }
   return { totalLength, sampleCount, samples, corners, startMid };
-}
-
-/**
- * Raggio a partire dalla distanza della maniglia (arcMid) dal vertice,
- * misurata lungo la bisettrice: dist(V, arcMid) = R·(1−sin(φ/2))/sin(φ/2).
- * Inversa usata dal drag della maniglia di curva.
- */
-export function radiusFromHandleDistance(d, sinHalf) {
-  if (1 - sinHalf < EPS) return Infinity;
-  return (d * sinHalf) / (1 - sinHalf);
 }

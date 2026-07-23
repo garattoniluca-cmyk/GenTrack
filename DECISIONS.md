@@ -218,6 +218,27 @@ click sembrava non fare niente. Usare sempre modali interne React
 **Sintomo osservato**: tab "2 · Spline" cliccabile ma inerte quando serviva
 la conferma di rigenerazione — il confirm bloccato inghiottiva l'azione.
 
+### D-021 — Stondature ASIMMETRICHE a due bracci (evoluzione di D-018)
+**Data**: 2026-07-23 (richiesta utente)
+**Decisione**: ogni curva è definita da DUE bracci indipendenti: `in`
+(distanza del punto di tangenza dal vertice sullo spigolo PRIMA, nel verso
+di percorrenza) e `out` (spigolo DOPO). La curva è una **Bézier quadratica**
+con punto di controllo sul vertice: tangente ai due bracci → C1 con i
+rettilinei per costruzione. Bracci uguali = stondatura simmetrica; diversi =
+asimmetrica (ingresso/uscita di curva controllati separatamente, es. corda
+tardiva). Il raggio non è più costante: si mostra il raggio MINIMO (`R~`).
+UI: due maniglie quadrate per curva (su T1 e T2) trascinabili lungo il
+proprio spigolo, guide tratteggiate vertice→maniglie, gialle se
+personalizzate, destro = reset. Braccio default in toolbar (60 m), clamp a
+0.49·spigolo, minimo 2 m. Schema: `stage2_spline = {defaultArmLength,
+cornerArms{idx: {in, out}}, resampledArcLength}`.
+**Motivazione**: un arco di cerchio tangente a due rette ha per forza
+bracci uguali — l'asimmetria richiede una curva a raggio variabile; la
+Bézier quadratica è la più semplice che garantisce C1.
+**Nota**: l'arco circolare simmetrico (D-018) resta il caso particolare
+bracci uguali (la Bézier quadratica simmetrica è una parabola ≈ arco per
+angoli non estremi — differenza trascurabile a queste scale).
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD
