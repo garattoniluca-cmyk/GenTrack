@@ -346,7 +346,22 @@ pendenza max 0.29% (spigolo vero ~10%).
   SUPERATA da rev. 3 lo stesso giorno: col braccio da 14 m (erba compresa)
   la carreggiata si sollevava di ~5 m nei transitori ("le macchine
   salterebbero" — utente).
-- **Rev. 3 (2026-07-23) — geometria da ovale reale**:
+- **Rev. 4 (2026-07-23) — FINALE: SWEEP RIGIDO attorno alla MEZZERIA**
+  (prescrizione esplicita dell'utente dopo il fallimento delle rev. 2-3):
+  la sezione trasversale è un profilo RIGIDO (muri compresi, solidali e
+  perpendicolari al piano bankato come nei catini reali) che ruota attorno
+  alla mezzeria del roll(s) e trasla a quota z(s). NESSUN termine di lift,
+  NESSUN cambio di lato, NESSUN caso speciale: le uniche variazioni lungo
+  s sono roll(s) e z(s), entrambe C1 → nessuna deformazione possibile.
+  Il lato interno scende sotto la quota nominale ED È CORRETTO: il terreno
+  (Fase 6) si cuce ai bordi del tubo (D-001) e seguirà il bordo dove sta —
+  il piano scuro nella scena è un riferimento visivo, non terreno.
+  LEZIONE (2 iterazioni bocciate): i termini correttivi "furbi" (lift,
+  apron per lato) erano essi stessi la fonte delle deformazioni percepite;
+  il metodo solido è il sweep rigido puro.
+  Test: mezzeria inchiodata a z per ogni roll, larghezze costanti
+  (rigidità), inclinazione simmetrica, muri 2 m esatti lungo la normale.
+- ~~Rev. 3 (2026-07-23) — geometria da ovale reale~~ (SUPERATA da rev. 4):
   · la CARREGGIATA (righe+asfalto) ruota attorno al SUO bordo basso (±w):
     quel bordo resta a quota z(s), il centro sale di soli w·sin(roll)
     (2 m a 20° su 12 m), spalmati sulla rampa — niente gobbe;

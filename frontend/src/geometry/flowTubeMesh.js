@@ -156,57 +156,43 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
     upN[i] = U;
     leftN[i] = L;
 
-    // GEOMETRIA DA OVALE REALE (D-026 rev.3):
-    // - la CARREGGIATA (righe+asfalto) ruota attorno al SUO bordo basso
-    //   (±w): quel bordo resta esattamente a quota z[i]; il centro sale di
-    //   soli w·|sin(roll)| (2 m a 20° su 12 m), spalmati sulla rampa —
-    //   niente gobbe da salto
-    // - l'ERBA sul lato BASSO resta ORIZZONTALE a quota z[i] (l'apron
-    //   piatto degli ovali): è la pista che si inclina, non il mondo che
-    //   si solleva
-    // - l'ERBA sul lato ALTO continua il piano bankato della carreggiata
-    // - lift C1 lungo s: |sin(roll)| ha kink solo dove roll tocca 0, cioè
-    //   agli estremi delle rampe smoothstep dove roll' = 0
-    const s1 = L[1]; // componente verticale del laterale bankato (~sin roll)
-    const roadLift = w * Math.abs(s1); // bordo basso carreggiata → quota z[i]
-
-    const roadAt = (d) => [
+    // METODO SOLIDO (D-026 rev.4, prescrizione utente): SWEEP RIGIDO.
+    // La sezione trasversale è un profilo RIGIDO che ruota attorno alla
+    // MEZZERIA della strada del roll(s) e trasla lungo il path a quota
+    // z(s). Nessun termine di lift, nessun cambio di lato, nessun caso
+    // speciale: l'unica variazione lungo s è roll(s) e z(s), entrambi C1
+    // per costruzione → nessuna deformazione possibile.
+    // Il lato interno scende sotto la quota nominale: è CORRETTO — il
+    // terreno (Fase 6) si cuce ai bordi del tubo (D-001) e seguirà il
+    // bordo dove sta. Anche i muri sono solidali alla sezione
+    // (perpendicolari al piano bankato, come nei catini reali).
+    void Lh;
+    void U0;
+    const at = (d) => [
       P[i][0] + L[0] * d,
-      P[i][1] + L[1] * d + roadLift,
+      P[i][1] + L[1] * d,
       P[i][2] + L[2] * d,
     ];
-    // erba orizzontale: parte dal bordo carreggiata e prosegue in piano
-    const flatFrom = (edge, dir, width) => [
-      edge[0] + Lh[0] * dir * width,
-      edge[1], // quota costante
-      edge[2] + Lh[2] * dir * width,
+
+    rGrassLOut[i] = at(dGrassL);
+    rLineLOut[i] = at(w);
+    rLineLIn[i] = at(w - lw);
+    rLineRIn[i] = at(-(w - lw));
+    rLineROut[i] = at(-w);
+    rGrassROut[i] = at(dGrassR);
+    grassLN[i] = U;
+    grassRN[i] = U;
+    // muri solidali alla sezione: estrusi lungo la normale del piano bankato
+    rWallLTop[i] = [
+      rGrassLOut[i][0] + U[0] * wallHeight,
+      rGrassLOut[i][1] + U[1] * wallHeight,
+      rGrassLOut[i][2] + U[2] * wallHeight,
     ];
-
-    rLineLOut[i] = roadAt(w);
-    rLineLIn[i] = roadAt(w - lw);
-    rLineRIn[i] = roadAt(-(w - lw));
-    rLineROut[i] = roadAt(-w);
-
-    if (s1 > 0) {
-      // sinistra alzata: erba SX nel piano bankato, erba DX piatta (apron)
-      rGrassLOut[i] = roadAt(dGrassL);
-      rGrassROut[i] = flatFrom(rLineROut[i], -1, section.grassRight);
-      grassLN[i] = U;
-      grassRN[i] = U0;
-    } else if (s1 < 0) {
-      rGrassLOut[i] = flatFrom(rLineLOut[i], +1, section.grassLeft);
-      rGrassROut[i] = roadAt(dGrassR);
-      grassLN[i] = U0;
-      grassRN[i] = U;
-    } else {
-      rGrassLOut[i] = roadAt(dGrassL);
-      rGrassROut[i] = roadAt(dGrassR);
-      grassLN[i] = U;
-      grassRN[i] = U;
-    }
-    // muri VERTICALI (gravità), dalla superficie dell'erba in su
-    rWallLTop[i] = [rGrassLOut[i][0], rGrassLOut[i][1] + wallHeight, rGrassLOut[i][2]];
-    rWallRTop[i] = [rGrassROut[i][0], rGrassROut[i][1] + wallHeight, rGrassROut[i][2]];
+    rWallRTop[i] = [
+      rGrassROut[i][0] + U[0] * wallHeight,
+      rGrassROut[i][1] + U[1] * wallHeight,
+      rGrassROut[i][2] + U[2] * wallHeight,
+    ];
   }
 
   const rightN = leftN.map((l) => [-l[0], -l[1], -l[2]]);

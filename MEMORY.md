@@ -161,7 +161,16 @@ http://localhost:5173. **112 test unitari verdi**.
         validazione curve più strette del tubo (warning, non correzione)
       - Verificato con screenshot: tubo corretto, 13.776 triangoli @984
         anelli, zero errori console
-- [x] 2026-07-23 — **Perno del bank, 3 iterazioni su feedback utente**:
+- [x] 2026-07-23 — **Perno del bank, 4 iterazioni su feedback utente —
+      FINALE: SWEEP RIGIDO attorno alla MEZZERIA** (D-026 rev.4, prescritto
+      dall'utente): sezione rigida (muri solidali perpendicolari al piano
+      bankato), solo rotazione roll(s) + traslazione z(s), zero termini
+      correttivi. Il lato interno sotto quota nominale È CORRETTO (il
+      terreno si cucirà ai bordi, D-001). LEZIONE: lift/apron "furbi" erano
+      la fonte delle deformazioni. 117 test verdi (mezzeria inchiodata,
+      rigidità, simmetria, muri esatti — tolleranze float32 ~mm su 2 km).
+      Verificato con screenshot: rettilineo pulito, transizione senza gobbe.
+      Storia iterazioni:
       (1) mezzeria → lato interno sotto quota (−6.8 m @20°): deformazioni;
       (2) bordo basso del TUBO intero (braccio 14 m) → carreggiata sollevata
       di ~5 m nei transitori ("le macchine salterebbero");

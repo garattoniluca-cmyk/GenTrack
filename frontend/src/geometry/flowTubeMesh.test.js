@@ -95,51 +95,58 @@ describe('buildFlowTubeMesh — struttura', () => {
 });
 
 describe('buildFlowTubeMesh — banking e quota', () => {
-  it('PERNO SUL BORDO BASSO: la pista non scende MAI sotto la quota nominale', () => {
-    // pista piatta (z=0) con roll variabile: nessun vertice della
-    // carreggiata/erba deve andare sotto y=0 (il vecchio perno in mezzeria
-    // affondava il lato interno di ~6.8 m a 20°)
+  it('SWEEP RIGIDO: la MEZZERIA resta esattamente a quota z, per qualsiasi roll', () => {
     const roll = Array.from({ length: N }, (_, i) => 20 * Math.sin((2 * Math.PI * i) / N));
     const m = buildFlowTubeMesh(path.samples, zFlat, roll, SECTION);
-    for (const band of [m.bands.asphalt, m.bands.lines, m.bands.grass]) {
-      for (let k = 1; k < band.positions.length; k += 3) {
-        expect(band.positions[k]).toBeGreaterThanOrEqual(-1e-9);
-      }
+    const a = m.bands.asphalt;
+    for (let i = 0; i < N; i++) {
+      // centro carreggiata = punto medio dei due rail dell'asfalto (±(w−lw))
+      const midY = (a.positions[i * 6 + 1] + a.positions[i * 6 + 4]) / 2;
+      expect(Math.abs(midY)).toBeLessThan(1e-9);
     }
   });
 
-  it('il bordo basso della CARREGGIATA resta esattamente a quota nominale', () => {
-    const roll10 = new Array(N).fill(10); // sinistra alzata → lato basso = destra
+  it('SWEEP RIGIDO: la sezione non si deforma — larghezze costanti a ogni roll', () => {
+    const roll = Array.from({ length: N }, (_, i) => 20 * Math.sin((2 * Math.PI * i) / N));
+    const m = buildFlowTubeMesh(path.samples, zFlat, roll, SECTION);
+    const g = m.bands.grass;
+    const half = g.positions.length / 2;
+    const fullWidth = 12 + 8 + 8; // grassLOut ↔ grassROut
+    for (let i = 0; i < N; i += 20) {
+      const L = g.positions.subarray(i * 6, i * 6 + 3); // erba SX rail esterno
+      const R = g.positions.subarray(half + i * 6 + 3, half + i * 6 + 6); // erba DX rail esterno
+      const d = Math.hypot(L[0] - R[0], L[1] - R[1], L[2] - R[2]);
+      // float32 su coordinate ~2000 m: ulp ≈ 2.4e-4 → tolleranza 2 mm
+      expect(Math.abs(d - fullWidth)).toBeLessThan(2e-3);
+    }
+  });
+
+  it('SWEEP RIGIDO: inclinazione simmetrica attorno alla mezzeria', () => {
+    const roll10 = new Array(N).fill(10);
     const m = buildFlowTubeMesh(path.samples, zFlat, roll10, SECTION);
     const lines = m.bands.lines;
-    const half = lines.positions.length / 2; // secondo blocco = riga DX
+    const half = lines.positions.length / 2;
     for (let i = 0; i < N; i += 50) {
-      const rightLineOuterY = lines.positions[half + i * 6 + 4]; // rail −w
-      expect(Math.abs(rightLineOuterY)).toBeLessThan(1e-9);
+      const leftOuterY = lines.positions[i * 6 + 1]; // rail +w
+      const rightOuterY = lines.positions[half + i * 6 + 4]; // rail −w
+      // il lato che sale e quello che scende sono speculari rispetto a z
+      expect(leftOuterY).toBeCloseTo(-rightOuterY, 6);
+      expect(leftOuterY).toBeGreaterThan(0);
     }
   });
 
-  it('APRON: l\'erba sul lato basso è PIATTA a quota terreno (come gli ovali reali)', () => {
-    const roll10 = new Array(N).fill(10); // lato basso = destra
-    const m = buildFlowTubeMesh(path.samples, zFlat, roll10, SECTION);
-    const g = m.bands.grass;
-    const half = g.positions.length / 2; // secondo blocco = erba DX
-    for (let k = half + 1; k < g.positions.length; k += 3) {
-      expect(Math.abs(g.positions[k])).toBeLessThan(1e-9); // tutta a z=0
-    }
-  });
-
-  it('GOBBA LIMITATA: la carreggiata sale al massimo di 2w·sin(roll), non di più', () => {
+  it('muri solidali alla sezione: lunghezza 2 m lungo la normale bankata', () => {
     const roll20 = new Array(N).fill(20);
     const m = buildFlowTubeMesh(path.samples, zFlat, roll20, SECTION);
-    const maxRise = 12 * Math.sin((20 * Math.PI) / 180) + 1e-6; // 2w·sin20 ≈ 4.10 m
-    const a = m.bands.asphalt;
-    for (let k = 1; k < a.positions.length; k += 3) {
-      expect(a.positions[k]).toBeLessThanOrEqual(maxRise);
-      expect(a.positions[k]).toBeGreaterThanOrEqual(-1e-9);
+    const walls = m.bands.walls;
+    for (let i = 0; i < N; i += 50) {
+      const dx = walls.positions[i * 6] - walls.positions[i * 6 + 3];
+      const dy = walls.positions[i * 6 + 1] - walls.positions[i * 6 + 4];
+      const dz = walls.positions[i * 6 + 2] - walls.positions[i * 6 + 5];
+      expect(Math.abs(Math.hypot(dx, dy, dz) - 2)).toBeLessThan(1e-3); // float32
+      // inclinato col bank: componente orizzontale non nulla a 20°
+      expect(Math.hypot(dx, dz)).toBeGreaterThan(0.5);
     }
-    // col vecchio perno sul bordo del TUBO il bordo alto arrivava a
-    // 2·(w+grass)·sin20 ≈ 9.6 m: qui deve restare sotto 4.2
   });
 
   it('CONTINUITÀ del lift lungo le rampe: nessun salto verticale', () => {
