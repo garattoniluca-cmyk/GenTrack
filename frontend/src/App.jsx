@@ -14,6 +14,8 @@ export default function App() {
   const setGridSize = useTrackStore((s) => s.setGridSize);
   const minClearance = useTrackStore((s) => s.minClearance);
   const setMinClearance = useTrackStore((s) => s.setMinClearance);
+  const minStartLength = useTrackStore((s) => s.minStartLength);
+  const setMinStartLength = useTrackStore((s) => s.setMinStartLength);
   const setDirection = useTrackStore((s) => s.setDirection);
   const undo = useTrackStore((s) => s.undo);
   const redo = useTrackStore((s) => s.redo);
@@ -43,6 +45,14 @@ export default function App() {
   );
   // polygon è già nella forma dello schema condiviso (points, gridSize, closed)
   const stage1Schema = polygon;
+
+  // lunghezza del segmento start attuale (per il warning se sotto il minimo)
+  const startSegLength =
+    polygon.startSegment != null
+      ? (segments.find((s) => s.index === polygon.startSegment)?.length ?? 0)
+      : null;
+  const startTooShort =
+    startSegLength != null && startSegLength < minStartLength;
 
   const status = polygon.closed
     ? { text: 'Poligono chiuso ✓', cls: 'ok' }
@@ -77,6 +87,17 @@ export default function App() {
             step="10"
             value={minClearance}
             onChange={(e) => setMinClearance(parseFloat(e.target.value))}
+          />
+        </label>
+
+        <label title="Lunghezza minima del rettilineo di start">
+          Start min (m)
+          <input
+            type="number"
+            min="0"
+            step="50"
+            value={minStartLength}
+            onChange={(e) => setMinStartLength(parseFloat(e.target.value))}
           />
         </label>
 
@@ -158,13 +179,21 @@ export default function App() {
         )}
         {polygon.closed &&
           (polygon.startSegment != null ? (
-            <span className="ok">
-              🏁 start: segmento {polygon.startSegment + 1} ·{' '}
-              {polygon.direction === 'cw' ? 'orario ⟳' : 'antiorario ⟲'}
-            </span>
+            startTooShort ? (
+              <span className="err">
+                🏁 start troppo corto: {startSegLength.toFixed(0)} m &lt;{' '}
+                {minStartLength} m — allunga il rettilineo o scegline un altro
+              </span>
+            ) : (
+              <span className="ok">
+                🏁 start: segmento {polygon.startSegment + 1} (
+                {startSegLength.toFixed(0)} m) ·{' '}
+                {polygon.direction === 'cw' ? 'orario ⟳' : 'antiorario ⟲'}
+              </span>
+            )
           ) : (
             <span className="warn">
-              🏁 imposta lo start — tasto destro su un segmento
+              🏁 imposta lo start — tasto destro su un segmento ≥ {minStartLength} m
             </span>
           ))}
         <span className={polygon.closed ? 'ok' : 'dim'}>

@@ -9,10 +9,12 @@ import {
   canClose,
   violatesClearance,
   signedArea,
+  dist,
 } from '../geometry/polygon.js';
 import {
   DEFAULT_GRID_SIZE,
   DEFAULT_MIN_CLEARANCE,
+  DEFAULT_MIN_START_LENGTH,
   clampToWorld,
 } from '../config.js';
 
@@ -42,6 +44,14 @@ export const useTrackStore = create(
       setMinClearance: (v) => {
         if (!(v >= 0)) return;
         set({ minClearance: v });
+      },
+
+      /** Lunghezza minima (m) del rettilineo di start. */
+      minStartLength: DEFAULT_MIN_START_LENGTH,
+
+      setMinStartLength: (v) => {
+        if (!(v >= 0)) return;
+        set({ minStartLength: v });
       },
 
       /** Aggiunge un punto (già in coordinate mondo), con snap alla griglia visibile. */
@@ -123,11 +133,17 @@ export const useTrackStore = create(
         return true;
       },
 
-      /** Imposta il segmento di start/finish (dal menu contestuale). */
+      /**
+       * Imposta il segmento di start/finish (dal menu contestuale).
+       * Rifiutato se il segmento è più corto di minStartLength.
+       */
       setStartSegment: (segIndex) => {
-        const { stage1Polygon } = get();
-        const n = stage1Polygon.points.length;
+        const { stage1Polygon, minStartLength } = get();
+        const pts = stage1Polygon.points;
+        const n = pts.length;
         if (!stage1Polygon.closed || segIndex < 0 || segIndex >= n) return;
+        const segLen = dist(pts[segIndex], pts[(segIndex + 1) % n]);
+        if (segLen < minStartLength) return;
         set({ stage1Polygon: { ...stage1Polygon, startSegment: segIndex } });
       },
 

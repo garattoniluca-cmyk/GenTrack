@@ -179,6 +179,12 @@ body {
   opacity: 0.45;
   cursor: default;
 }
+.context-menu .menu-note {
+  display: block;
+  font-size: 10px;
+  color: var(--err);
+  margin-top: 2px;
+}
 
 /* ---- side panel ---- */
 .side-panel {

@@ -12,6 +12,12 @@ export const DEFAULT_GRID_SIZE = 10;
  */
 export const DEFAULT_MIN_CLEARANCE = 50;
 
+/**
+ * Lunghezza minima (metri) del segmento scelto come start/finish.
+ * Configurabile dalla toolbar.
+ */
+export const DEFAULT_MIN_START_LENGTH = 700;
+
 /** Limiti di zoom (px per metro). Al minimo l'intera area 5000 m è visibile. */
 export const ZOOM_MIN = 0.08;
 export const ZOOM_MAX = 200;

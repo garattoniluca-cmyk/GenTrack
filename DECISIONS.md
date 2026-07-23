@@ -156,6 +156,12 @@ inserimento/rimozione di punti.
 **Motivazione**: il verso determina il lato esterno (vie di fuga), il segno
 del banking e l'orientamento delle chicane nelle fasi successive; va fissato
 alla fonte. Lo start dà l'origine dell'ascissa curvilinea s=0 in Fase 2.
+**Vincolo lunghezza** (aggiunta 2026-07-23): il segmento start deve essere
+lungo almeno `minStartLength` (default **700 m**, campo "Start min" in
+toolbar). La voce di menu è disabilitata sui segmenti troppo corti (con
+lunghezza mostrata); se un editing successivo accorcia lo start sotto il
+minimo, la statusbar mostra un errore ma lo start non viene rimosso
+automaticamente.
 
 <!-- Template nuova decisione:
 ### D-0XX — Titolo

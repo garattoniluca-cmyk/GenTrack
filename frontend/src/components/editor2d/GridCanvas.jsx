@@ -75,6 +75,7 @@ export default function GridCanvas() {
   const beginBatch = useTrackStore((s) => s.beginBatch);
   const endBatch = useTrackStore((s) => s.endBatch);
   const minClearance = useTrackStore((s) => s.minClearance);
+  const minStartLength = useTrackStore((s) => s.minStartLength);
 
   const { points, gridSize, closed } = polygon;
 
@@ -704,22 +705,36 @@ export default function GridCanvas() {
               🗑 Elimina punto
             </button>
           )}
-          {ctxMenu.kind === 'segment' && (
-            <button
-              disabled={polygon.startSegment === ctxMenu.index}
-              title={
-                polygon.startSegment === ctxMenu.index
-                  ? 'Questo segmento è già lo start'
-                  : `Rettilineo di partenza sul segmento ${ctxMenu.index + 1}`
-              }
-              onClick={() => {
-                setStartSegment(ctxMenu.index);
-                setCtxMenu(null);
-              }}
-            >
-              🏁 Imposta come start
-            </button>
-          )}
+          {ctxMenu.kind === 'segment' &&
+            (() => {
+              const seg = segments.find((s) => s.index === ctxMenu.index);
+              const segLen = seg ? seg.length : 0;
+              const tooShort = segLen < minStartLength;
+              const isStart = polygon.startSegment === ctxMenu.index;
+              return (
+                <button
+                  disabled={isStart || tooShort}
+                  title={
+                    isStart
+                      ? 'Questo segmento è già lo start'
+                      : tooShort
+                        ? `Troppo corto: ${segLen.toFixed(0)} m — lo start richiede almeno ${minStartLength} m`
+                        : `Rettilineo di partenza sul segmento ${ctxMenu.index + 1} (${segLen.toFixed(0)} m)`
+                  }
+                  onClick={() => {
+                    setStartSegment(ctxMenu.index);
+                    setCtxMenu(null);
+                  }}
+                >
+                  🏁 Imposta come start
+                  {tooShort && (
+                    <span className="menu-note">
+                      {segLen.toFixed(0)} m &lt; {minStartLength} m
+                    </span>
+                  )}
+                </button>
+              );
+            })()}
         </div>
       )}
     </div>

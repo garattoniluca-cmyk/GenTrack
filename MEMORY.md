@@ -49,6 +49,9 @@ Editor poligonale 2D funzionante su http://localhost:5173 (`npm run dev` in
       orario/antiorario in toolbar (default = winding del disegno), marker a
       scacchi + freccia del verso, campi `startSegment`/`direction` nello
       schema condiviso, rimappatura indici su insert/remove. 38 test verdi.
+- [x] 2026-07-23 — **Lunghezza minima start 700 m** configurabile ("Start min"
+      in toolbar): menu disabilitato sui segmenti corti, errore in statusbar
+      se un editing accorcia lo start sotto il minimo.
 - [ ] Fase 1: **validazione visiva/interattiva dell'utente** in corso.
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —
