@@ -89,16 +89,16 @@
             "grassRight": { "type": "number", "exclusiveMinimum": 0, "default": 8 }
           }
         },
-        "bankingChannel": {
-          "type": "array",
-          "description": "Canale periodico a keyframe, SEMPRE input utente (D-002)",
-          "items": {
+        "cornerBanking": {
+          "type": "object",
+          "description": "Banking PER CURVA (D-024), SEMPRE input utente (D-002): chiave = indice vertice stage1; bank COSTANTE lungo la stondatura con rampe smoothstep di salita/ritorno a zero (metri) prima e dopo la curva",
+          "additionalProperties": {
             "type": "object",
-            "required": ["s", "angleDeg"],
+            "required": ["angleDeg"],
             "properties": {
-              "s": { "$ref": "#/definitions/sNorm" },
               "angleDeg": { "type": "number", "minimum": -30, "maximum": 30 },
-              "transition": { "$ref": "#/definitions/transition" }
+              "rampBefore": { "type": "number", "minimum": 0, "default": 100 },
+              "rampAfter": { "type": "number", "minimum": 0, "default": 100 }
             }
           }
         },

@@ -1,10 +1,10 @@
 // FlowTubeEditor.jsx — Fase 3A: pianta del tubo di flusso semplificato.
 // Mostra: fasce erba, asfalto, righe bianche (geometrie offset dalla
 // mezzeria) e la mezzeria colorata per QUOTA (blu=basso → rosso=alto).
-// L'editing di 3A avviene nei pannelli (sezione, rumore) e nel grafico
-// banking sotto il canvas — qui solo visualizzazione + zoom/pan.
+// Il BANKING si imposta QUI, curva per curva (D-024): click sul marker
+// di una curva → popup con angolo e rampe di ritorno a zero.
 
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Arrow, Shape } from 'react-konva';
 import { useTrackStore } from '../../state/trackStore.js';
 import { resampleFilletPath } from '../../geometry/spline.js';
@@ -52,11 +52,36 @@ export default function FlowTubeEditor({ resampled, elevation }) {
 
   const polygon = useTrackStore((s) => s.stage1Polygon);
   const section = useTrackStore((s) => s.stage3FlowTube.section);
+  const cornerBanking = useTrackStore((s) => s.stage3FlowTube.cornerBanking);
+  const setCornerBanking = useTrackStore((s) => s.setCornerBanking);
+  const removeCornerBanking = useTrackStore((s) => s.removeCornerBanking);
+
+  // popup di editing bank: {origIndex, x, y} in px schermo
+  const [bankEdit, setBankEdit] = useState(null);
+
+  // chiudi popup con Esc o wheel (il click fuori è gestito dall'overlay)
+  useEffect(() => {
+    if (!bankEdit) return;
+    const down = (e) => {
+      if (e.key === 'Escape') setBankEdit(null);
+    };
+    const wheel = () => setBankEdit(null);
+    window.addEventListener('keydown', down);
+    window.addEventListener('wheel', wheel, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('wheel', wheel);
+    };
+  }, [bankEdit]);
 
   let effGrid = polygon.gridSize;
   while (effGrid * view.scale < 8) effGrid *= 5;
 
   const { samples } = resampled;
+  const corners = useMemo(
+    () => resampled.corners.filter((c) => !c.skip),
+    [resampled.corners]
+  );
 
   // bordi del tubo (offset dalla mezzeria)
   const outlines = useMemo(
@@ -169,6 +194,50 @@ export default function FlowTubeEditor({ resampled, elevation }) {
           {/* mezzeria termica per quota */}
           {zRange && <Shape sceneFunc={drawHeatCenterline} />}
 
+          {/* marker delle curve: click = imposta banking */}
+          {corners.map((c) => {
+            const bk = cornerBanking[c.origIndex];
+            const hasBank = bk && bk.angleDeg !== 0;
+            return (
+              <Group key={`bk${c.origIndex}`}>
+                <Circle
+                  x={c.mid.x}
+                  y={c.mid.y}
+                  radius={7 / view.scale}
+                  fill={hasBank ? COLORS.label : '#565e6b'}
+                  stroke="#0d1117"
+                  strokeWidth={1.5 / view.scale}
+                  onClick={(e) => {
+                    if (e.evt.button !== 0) return;
+                    e.cancelBubble = true;
+                    const pos = stageRef.current.getPointerPosition();
+                    if (pos) setBankEdit({ origIndex: c.origIndex, x: pos.x, y: pos.y });
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.getStage().container().style.cursor = 'pointer';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.getStage().container().style.cursor = '';
+                  }}
+                />
+                {hasBank && (
+                  <Text
+                    x={c.mid.x}
+                    y={c.mid.y}
+                    text={`${bk.angleDeg > 0 ? '+' : ''}${bk.angleDeg}°`}
+                    fontSize={11 / view.scale}
+                    fontStyle="bold"
+                    fill={COLORS.label}
+                    scaleY={-1}
+                    offsetX={-(10 / view.scale)}
+                    offsetY={-(12 / view.scale)}
+                    listening={false}
+                  />
+                )}
+              </Group>
+            );
+          })}
+
           {/* marker s=0 + freccia verso */}
           {startArrow && (
             <Group>
@@ -230,6 +299,76 @@ export default function FlowTubeEditor({ resampled, elevation }) {
       <div className="scalebar" style={{ width: `${scaleBarPx}px` }}>
         <span>{scaleBarLabel}</span>
       </div>
+
+      {/* popup impostazione banking della curva */}
+      {bankEdit &&
+        (() => {
+          const bk = cornerBanking[bankEdit.origIndex] ?? {
+            angleDeg: 0,
+            rampBefore: 100,
+            rampAfter: 100,
+          };
+          const patch = (p) => setCornerBanking(bankEdit.origIndex, p);
+          return (
+            <>
+              {/* click fuori = chiudi */}
+              <div className="popup-catcher" onMouseDown={() => setBankEdit(null)} />
+              <div
+                className="context-menu bank-popup"
+                style={{ left: bankEdit.x, top: bankEdit.y }}
+                onMouseDown={(e) => e.stopPropagation()}
+                onContextMenu={(e) => e.preventDefault()}
+              >
+                <div className="bank-popup-title">🏔 Banking della curva</div>
+                <label className="param-row">
+                  Bank (°)
+                  <input
+                    type="number"
+                    min="-30"
+                    max="30"
+                    step="1"
+                    value={bk.angleDeg}
+                    autoFocus
+                    onChange={(e) => patch({ angleDeg: parseFloat(e.target.value) || 0 })}
+                  />
+                </label>
+                <label className="param-row">
+                  Rampa prima (m)
+                  <input
+                    type="number"
+                    min="0"
+                    step="25"
+                    value={bk.rampBefore}
+                    onChange={(e) => patch({ rampBefore: parseFloat(e.target.value) || 0 })}
+                  />
+                </label>
+                <label className="param-row">
+                  Rampa dopo (m)
+                  <input
+                    type="number"
+                    min="0"
+                    step="25"
+                    value={bk.rampAfter}
+                    onChange={(e) => patch({ rampAfter: parseFloat(e.target.value) || 0 })}
+                  />
+                </label>
+                <div className="bank-popup-actions">
+                  <button
+                    onClick={() => {
+                      removeCornerBanking(bankEdit.origIndex);
+                      setBankEdit(null);
+                    }}
+                  >
+                    ✕ Azzera
+                  </button>
+                  <button className="primary" onClick={() => setBankEdit(null)}>
+                    Fatto
+                  </button>
+                </div>
+              </div>
+            </>
+          );
+        })()}
     </div>
   );
 }

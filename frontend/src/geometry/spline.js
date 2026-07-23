@@ -166,17 +166,22 @@ export function resampleFilletPath(
     const last = dense[dense.length - 1];
     if (dist(last, p) > 1e-6) dense.push({ x: p.x, y: p.y });
   };
+  // indice denso di inizio/fine curva, per ricavare l'estensione in s di
+  // ogni stondatura (serve al banking per-curva)
+  const cornerMarks = new Map();
   for (const c of corners) {
     if (c.skip) {
       push(c.V);
       continue;
     }
     push(c.T1); // rettilineo fino all'inizio della stondatura
+    const startIdx = dense.length - 1;
     const estLen = (dist(c.T1, c.V) + dist(c.V, c.T2) + dist(c.T1, c.T2)) / 2;
     const steps = Math.max(16, Math.ceil(estLen / 1)); // ~1 m per step sugli archi
     for (let k = 1; k <= steps; k++) {
       push(cornerBezierPoint(c.T1, c.V, c.T2, k / steps));
     }
+    cornerMarks.set(c, { startIdx, endIdx: dense.length - 1 });
   }
   push(startMid); // chiusura lungo il rettilineo di start
 
@@ -188,6 +193,17 @@ export function resampleFilletPath(
   if (totalLength < EPS) {
     return { totalLength: 0, sampleCount: 0, samples: [], corners, startMid };
   }
+
+  // estensione in s di ogni curva: [sStart, sEnd]
+  const cornersWithS = corners.map((c) => {
+    const m = cornerMarks.get(c);
+    if (!m) return c;
+    return {
+      ...c,
+      sStart: cum[m.startIdx] / totalLength,
+      sEnd: cum[m.endIdx] / totalLength,
+    };
+  });
 
   const sampleCount = Math.max(
     minCount,
@@ -208,5 +224,5 @@ export function resampleFilletPath(
       y: dense[k].y + f * (dense[k + 1].y - dense[k].y),
     });
   }
-  return { totalLength, sampleCount, samples, corners, startMid };
+  return { totalLength, sampleCount, samples, corners: cornersWithS, startMid };
 }

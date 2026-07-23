@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import GridCanvas from './components/editor2d/GridCanvas.jsx';
 import SplineEditor from './components/editor2d/SplineEditor.jsx';
 import FlowTubeEditor from './components/editor2d/FlowTubeEditor.jsx';
-import BankingEditor from './components/panels/BankingEditor.jsx';
+import BankingProfile from './components/panels/BankingProfile.jsx';
 import ElevationProfile from './components/panels/ElevationProfile.jsx';
 import {
   useTrackStore,
@@ -19,6 +19,7 @@ import {
 } from './geometry/polygon.js';
 import { resampleFilletPath } from './geometry/spline.js';
 import { buildElevation } from './geometry/trackNoise.js';
+import { buildBankingProfile } from './geometry/banking.js';
 
 export default function App() {
   const phase = useTrackStore((s) => s.phase);
@@ -89,6 +90,16 @@ export default function App() {
         ? buildElevation(resampled.sampleCount, resampled.totalLength, flowTube.elevationNoise)
         : null,
     [resampled.sampleCount, resampled.totalLength, flowTube.elevationNoise]
+  );
+  const bankingProfile = useMemo(
+    () =>
+      buildBankingProfile(
+        resampled.sampleCount,
+        resampled.totalLength,
+        resampled.corners,
+        flowTube.cornerBanking
+      ),
+    [resampled.sampleCount, resampled.totalLength, resampled.corners, flowTube.cornerBanking]
   );
 
   const startSegLength =
@@ -283,7 +294,7 @@ export default function App() {
           <div className="canvas-with-charts">
             <FlowTubeEditor resampled={resampled} elevation={elevation} />
             <div className="charts-row">
-              <BankingEditor />
+              <BankingProfile bankingProfile={bankingProfile} />
               <ElevationProfile
                 elevation={elevation}
                 totalLength={resampled.totalLength}
@@ -380,7 +391,8 @@ export default function App() {
               <div className="hints">
                 <h3>Comandi</h3>
                 <ul>
-                  <li><b>Grafico banking</b>: doppio click aggiunge, drag sposta, destro elimina</li>
+                  <li><b>Click sul marker di una curva</b> — imposta bank e rampe di ritorno a zero</li>
+                  <li>Marker <b>giallo</b> = curva con bank; il grafico in basso è sola visualizzazione</li>
                   <li><b>🎲 Nuovo seed</b> — altra altimetria con gli stessi parametri</li>
                   <li>Mezzeria colorata per quota (blu=basso, rosso=alto)</li>
                   <li><b>Rotellina / Space+drag</b> — zoom / pan</li>
@@ -473,7 +485,13 @@ export default function App() {
               </b>
             </span>
             <span>
-              Banking kf: <b>{flowTube.bankingChannel.length}</b>
+              Curve con bank:{' '}
+              <b>
+                {
+                  Object.values(flowTube.cornerBanking).filter((b) => b.angleDeg !== 0)
+                    .length
+                }
+              </b>
             </span>
             {elevation && (
               <>

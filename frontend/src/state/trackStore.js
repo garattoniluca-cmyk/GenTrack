@@ -50,8 +50,9 @@ const initialFlowTube = {
     grassLeft: 8, // fascia erba lato sinistro (m, verso di percorrenza)
     grassRight: 8, // fascia erba lato destro (m)
   },
-  // banking lungo s: SEMPRE input utente (D-002), canale periodico
-  bankingChannel: [{ s: 0, angleDeg: 0, transition: 'smoothstep' }],
+  // banking PER CURVA (D-024): { [indiceVertice]: {angleDeg, rampBefore, rampAfter} }
+  // — bank costante lungo la curva, rampe smoothstep di ritorno a zero (m)
+  cornerBanking: {},
   // altimetria: parametri del rumore periodico (D-022) — z(s) è derivato puro
   elevationNoise: {
     seed: 12345,
@@ -319,40 +320,39 @@ export const useTrackStore = create(
         });
       },
 
-      /** Aggiunge un keyframe di banking (dal doppio click sul grafico). */
-      addBankingKeyframe: (s, angleDeg) => {
+      /**
+       * Imposta/aggiorna il banking di una curva (dalla mappa).
+       * patch: {angleDeg?, rampBefore?, rampAfter?} (gradi, metri).
+       */
+      setCornerBanking: (origIndex, patch) => {
         const { stage3FlowTube } = get();
-        const kf = {
-          s: Math.min(0.999, Math.max(0, s)),
-          angleDeg: Math.min(30, Math.max(-30, angleDeg)),
-          transition: 'smoothstep',
+        const prev = stage3FlowTube.cornerBanking[origIndex] ?? {
+          angleDeg: 0,
+          rampBefore: 100,
+          rampAfter: 100,
         };
-        const next = [...stage3FlowTube.bankingChannel, kf].sort((a, b) => a.s - b.s);
-        set({ stage3FlowTube: { ...stage3FlowTube, bankingChannel: next } });
+        const next = { ...prev, ...patch };
+        next.angleDeg = Math.min(30, Math.max(-30, next.angleDeg));
+        next.rampBefore = Math.max(0, next.rampBefore);
+        next.rampAfter = Math.max(0, next.rampAfter);
+        set({
+          stage3FlowTube: {
+            ...stage3FlowTube,
+            cornerBanking: {
+              ...stage3FlowTube.cornerBanking,
+              [origIndex]: next,
+            },
+          },
+        });
       },
 
-      /** Aggiorna un keyframe di banking (drag sul grafico). */
-      updateBankingKeyframe: (index, patch) => {
+      /** Azzera il banking di una curva. */
+      removeCornerBanking: (origIndex) => {
         const { stage3FlowTube } = get();
-        const kfs = stage3FlowTube.bankingChannel;
-        if (index < 0 || index >= kfs.length) return;
-        const kf = { ...kfs[index], ...patch };
-        kf.s = Math.min(0.999, Math.max(0, kf.s));
-        kf.angleDeg = Math.min(30, Math.max(-30, kf.angleDeg));
-        const next = kfs.slice();
-        next[index] = kf;
-        next.sort((a, b) => a.s - b.s);
-        set({ stage3FlowTube: { ...stage3FlowTube, bankingChannel: next } });
-      },
-
-      /** Rimuove un keyframe di banking (ne resta almeno uno). */
-      removeBankingKeyframe: (index) => {
-        const { stage3FlowTube } = get();
-        const kfs = stage3FlowTube.bankingChannel;
-        if (kfs.length <= 1 || index < 0 || index >= kfs.length) return;
-        const next = kfs.slice();
-        next.splice(index, 1);
-        set({ stage3FlowTube: { ...stage3FlowTube, bankingChannel: next } });
+        if (!(origIndex in stage3FlowTube.cornerBanking)) return;
+        const cornerBanking = { ...stage3FlowTube.cornerBanking };
+        delete cornerBanking[origIndex];
+        set({ stage3FlowTube: { ...stage3FlowTube, cornerBanking } });
       },
 
       /**

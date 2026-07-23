@@ -265,6 +265,20 @@ Defaults sezione: pista 12 m (min FIA), riga 0.2 m, erba 8+8 m.
 **Motivazione**: semplificare per arrivare presto al 3D con dati solidi;
 i canali variabili si reintroducono quando la pipeline regge.
 
+### D-024 — Banking impostato PER CURVA sulla mappa (non a keyframe liberi)
+**Data**: 2026-07-23 (correzione UX richiesta dall'utente)
+**Decisione**: il banking si imposta sulla MAPPA a livello di curva: click
+sul marker al centro di ogni stondatura → popup con angolo (±30°) e rampe
+di ritorno a zero prima/dopo (m, default 100). Bank COSTANTE lungo
+l'estensione s della curva (registrata da resampleFilletPath), rampe
+smoothstep (derivata nulla agli estremi → profilo C1). Contributi di curve
+vicine si sommano (clamp ±30). Il grafico banking è SOLA VISUALIZZAZIONE
+del profilo risultante. Sostituisce il canale a keyframe liberi (UX bocciata:
+scollegata dalle curve reali). Marker giallo + etichetta gradi = curva con
+bank. Schema: `cornerBanking{idx: {angleDeg, rampBefore, rampAfter}}`.
+**Motivazione**: il banking è una proprietà della CURVA, non di ascisse
+astratte; l'editing sulla mappa lo lega a ciò che si vede.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD

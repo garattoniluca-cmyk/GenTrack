@@ -308,6 +308,46 @@ body {
   background: linear-gradient(90deg, #3b82f6, #22d3ee, #4ade80, #facc15, #f85149);
 }
 
+/* popup bank su curva */
+.popup-catcher {
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+}
+.bank-popup {
+  min-width: 210px;
+  padding: 10px 12px;
+  z-index: 11;
+}
+.bank-popup-title {
+  font-size: 12px;
+  color: var(--text);
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+.bank-popup .param-row { padding: 3px 0; }
+.bank-popup-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+.bank-popup-actions button {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.bank-popup-actions button:hover { border-color: var(--accent); }
+.bank-popup-actions button.primary {
+  background: var(--accent);
+  color: #0d1117;
+  font-weight: 600;
+}
+
 /* ---- modale ---- */
 .modal-overlay {
   position: fixed;

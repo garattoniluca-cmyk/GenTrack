@@ -107,6 +107,12 @@ altimetria) su http://localhost:5173. **84 test unitari verdi**.
         parametri sezione+rumore+statistiche, statusbar 3A
       - Schema stage3_flowTube riscritto (semplificato, rinvii documentati)
       - Collaudo e2e: 4920 m, limitatore pendenza aggancia esattamente il 10%
+- [x] 2026-07-23 — **Banking rifatto PER CURVA** (D-024, UX a keyframe
+      bocciata): click sul marker di curva nella mappa → popup angolo+rampe
+      ritorno a zero; profilo C1 (rampe smoothstep, somma contributi, wrap
+      periodico); grafico ora sola visualizzazione (BankingProfile);
+      `geometry/banking.js` + 7 test (tot **91 verdi**); spline.js registra
+      l'estensione s di ogni curva (sStart/sEnd); schema cornerBanking.
 - [ ] Fase 3A: **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).
