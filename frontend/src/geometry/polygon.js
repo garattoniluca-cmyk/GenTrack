@@ -152,6 +152,41 @@ export function totalLength(points, closed = false) {
   return segmentLengths(points, closed).reduce((sum, s) => sum + s.length, 0);
 }
 
+/** Distanza minima tra il punto p e il segmento [a,b]. */
+export function pointSegmentDistance(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return dist(p, a);
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/**
+ * True se `candidate` viola la distanza minima `minDist` da un punto o un
+ * segmento esistente della polyline/poligono.
+ * - closed: considera anche il segmento di chiusura
+ * - excludeSegment: indice di segmento da ignorare (per l'inserimento di un
+ *   punto SU quel segmento, che per costruzione gli è a distanza ~0)
+ */
+export function violatesClearance(
+  points,
+  candidate,
+  minDist,
+  { closed = false, excludeSegment = -1 } = {}
+) {
+  if (!(minDist > 0)) return false;
+  for (const p of points) {
+    if (dist(p, candidate) < minDist) return true;
+  }
+  for (const seg of segmentLengths(points, closed)) {
+    if (seg.index === excludeSegment) continue;
+    if (pointSegmentDistance(candidate, seg.a, seg.b) < minDist) return true;
+  }
+  return false;
+}
+
 /**
  * Self-intersections del poligono CHIUSO trattato come anello di n segmenti
  * (segmento i: points[i] → points[(i+1) % n]). Esclude le coppie adiacenti

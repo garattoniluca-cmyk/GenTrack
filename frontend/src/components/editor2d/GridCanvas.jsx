@@ -24,6 +24,7 @@ import {
   segmentLengths,
   canClose,
   dist,
+  violatesClearance,
 } from '../../geometry/polygon.js';
 import {
   WORLD_HALF_EXTENT,
@@ -68,6 +69,7 @@ export default function GridCanvas() {
   const insertPointOnSegment = useTrackStore((s) => s.insertPointOnSegment);
   const beginBatch = useTrackStore((s) => s.beginBatch);
   const endBatch = useTrackStore((s) => s.endBatch);
+  const minClearance = useTrackStore((s) => s.minClearance);
 
   const { points, gridSize, closed } = polygon;
 
@@ -243,6 +245,12 @@ export default function GridCanvas() {
 
   // --- dati derivati per il render ---
   const snappedCursor = cursorWorld && !closed ? snapToGrid(cursorWorld, effGrid) : null;
+
+  // il candidato sotto il cursore viola la distanza minima? (feedback rosso)
+  const cursorClearanceViolated =
+    snappedCursor && points.length >= 1
+      ? violatesClearance(points, snappedCursor, minClearance)
+      : false;
 
   const rubberConflicts =
     snappedCursor && points.length >= 2
@@ -427,7 +435,11 @@ export default function GridCanvas() {
                 snappedCursor.x,
                 snappedCursor.y,
               ]}
-              stroke={rubberConflicts.length ? COLORS.rubberConflict : COLORS.rubber}
+              stroke={
+                rubberConflicts.length || cursorClearanceViolated
+                  ? COLORS.rubberConflict
+                  : COLORS.rubber
+              }
               strokeWidth={2 / view.scale}
               dash={[6 / view.scale, 4 / view.scale]}
               listening={false}
@@ -503,16 +515,31 @@ export default function GridCanvas() {
             ))}
           </Group>
 
-          {/* cursore snappato */}
+          {/* cursore snappato (rosso se viola la distanza minima) */}
           {!closed && snappedCursor && !nearFirst && (
-            <Circle
-              x={snappedCursor.x}
-              y={snappedCursor.y}
-              radius={vertexR * 0.8}
-              stroke={COLORS.segment}
-              strokeWidth={1.5 / view.scale}
-              listening={false}
-            />
+            <>
+              <Circle
+                x={snappedCursor.x}
+                y={snappedCursor.y}
+                radius={vertexR * 0.8}
+                stroke={cursorClearanceViolated ? COLORS.conflict : COLORS.segment}
+                strokeWidth={1.5 / view.scale}
+                listening={false}
+              />
+              {/* raggio di rispetto attorno al candidato rifiutato */}
+              {cursorClearanceViolated && (
+                <Circle
+                  x={snappedCursor.x}
+                  y={snappedCursor.y}
+                  radius={minClearance}
+                  stroke={COLORS.conflict}
+                  strokeWidth={1 / view.scale}
+                  dash={[4 / view.scale, 4 / view.scale]}
+                  opacity={0.5}
+                  listening={false}
+                />
+              )}
+            </>
           )}
         </Layer>
       </Stage>

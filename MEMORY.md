@@ -36,6 +36,10 @@ Editor poligonale 2D funzionante su http://localhost:5173 (`npm run dev` in
       clampati), griglia default **10 m**, **barra di scala** stile cartina,
       zoom 0.08–200 px/m, griglia renderizzata solo nel viewport (perf).
       Costanti in `frontend/src/config.js` (D-013).
+- [x] 2026-07-23 — **Snap sulla griglia visibile** (non sul gridSize base).
+- [x] 2026-07-23 — **Distanza minima punti nuovi** 50 m configurabile (D-014):
+      rifiuto aggiunta/inserimento se troppo vicino a punti o segmenti;
+      feedback rosso + raggio di rispetto. 35 test verdi.
 - [ ] Fase 1: **validazione visiva/interattiva dell'utente** in corso.
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —

@@ -10,6 +10,8 @@ import {
   segmentLengths,
   totalLength,
   ringSelfIntersections,
+  pointSegmentDistance,
+  violatesClearance,
 } from './polygon.js';
 
 const P = (x, y) => ({ x, y });
@@ -120,6 +122,54 @@ describe('segmentLengths / totalLength', () => {
   });
   it('meno di 3 punti: nessun segmento di chiusura', () => {
     expect(segmentLengths([P(0, 0), P(1, 0)], true).length).toBe(1);
+  });
+});
+
+describe('pointSegmentDistance', () => {
+  it('piede della perpendicolare interno al segmento', () => {
+    expect(pointSegmentDistance(P(2, 3), P(0, 0), P(4, 0))).toBe(3);
+  });
+  it('oltre gli estremi: distanza dal vertice più vicino', () => {
+    expect(pointSegmentDistance(P(7, 4), P(0, 0), P(4, 0))).toBe(5);
+    expect(pointSegmentDistance(P(-3, 4), P(0, 0), P(4, 0))).toBe(5);
+  });
+  it('segmento degenere (punto)', () => {
+    expect(pointSegmentDistance(P(3, 4), P(0, 0), P(0, 0))).toBe(5);
+  });
+});
+
+describe('violatesClearance', () => {
+  const pts = [P(0, 0), P(200, 0), P(200, 200)]; // due segmenti da 200 m
+  it('candidato lontano: nessuna violazione', () => {
+    expect(violatesClearance(pts, P(0, 200), 50)).toBe(false);
+  });
+  it('candidato a meno di minDist da un PUNTO: violazione', () => {
+    expect(violatesClearance(pts, P(230, 230), 50)).toBe(true); // 42.4 m dal vertice (200,200)
+  });
+  it('candidato a meno di minDist da un SEGMENTO: violazione', () => {
+    expect(violatesClearance(pts, P(100, 30), 50)).toBe(true); // 30 m dal segmento basso
+  });
+  it('distanza esattamente minDist: consentita', () => {
+    expect(violatesClearance(pts, P(100, 50), 50)).toBe(false); // 50 m esatti
+  });
+  it('excludeSegment ignora il segmento su cui si inserisce', () => {
+    // punto sul segmento 0, che senza esclusione violerebbe sempre
+    expect(
+      violatesClearance(pts, P(100, 0), 50, { excludeSegment: 0 })
+    ).toBe(false);
+    // ma se troppo vicino a un ENDPOINT del segmento resta rifiutato
+    expect(
+      violatesClearance(pts, P(30, 0), 50, { excludeSegment: 0 })
+    ).toBe(true);
+  });
+  it('closed=true considera anche il segmento di chiusura', () => {
+    const square = [P(0, 0), P(200, 0), P(200, 200), P(0, 200)];
+    // vicino al lato di chiusura (0,200)→(0,0)
+    expect(violatesClearance(square, P(-30, 100), 50, { closed: true })).toBe(true);
+    expect(violatesClearance(square, P(-30, 100), 50, { closed: false })).toBe(false);
+  });
+  it('minDist 0 o negativa: mai violazione', () => {
+    expect(violatesClearance(pts, P(1, 1), 0)).toBe(false);
   });
 });
 

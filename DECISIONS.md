@@ -122,6 +122,19 @@ cui ci si aggancia (aggiunta 2026-07-23 su richiesta utente).
 **Motivazione**: scala realistica per circuiti (km), riferimento visivo di
 distanza indipendente dallo zoom.
 
+### D-014 — Distanza minima punti nuovi (default 50 m, configurabile)
+**Data**: 2026-07-23 (richiesta utente)
+**Decisione**: un punto NUOVO (aggiunta in coda o inserimento su segmento)
+viene rifiutato se dista meno di `minClearance` (default 50 m, campo
+"Dist. min" in toolbar, 0 = disattivato) da qualunque punto o segmento
+esistente. Per l'inserimento su segmento si esclude il segmento ospite dal
+controllo, ma NON i suoi estremi (inserire su un segmento più corto di 2×D
+resta impossibile). Feedback: cursore e segmento elastico rossi + cerchio
+tratteggiato del raggio di rispetto. Lo spostamento (drag) di punti
+esistenti non è soggetto al vincolo.
+**Motivazione**: spaziatura minima garantisce qualità della spline in Fase 2
+(niente cluster di control point né passaggi ravvicinati).
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD

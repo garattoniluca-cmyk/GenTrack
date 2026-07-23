@@ -4,8 +4,12 @@
 
 import { create } from 'zustand';
 import { withHistory } from './historyMiddleware.js';
-import { snapToGrid, canClose } from '../geometry/polygon.js';
-import { DEFAULT_GRID_SIZE, clampToWorld } from '../config.js';
+import { snapToGrid, canClose, violatesClearance } from '../geometry/polygon.js';
+import {
+  DEFAULT_GRID_SIZE,
+  DEFAULT_MIN_CLEARANCE,
+  clampToWorld,
+} from '../config.js';
 
 const initialPolygon = {
   points: [], // [{x, y}] in metri, y-up
@@ -25,14 +29,24 @@ export const useTrackStore = create(
     (set, get) => ({
       stage1Polygon: initialPolygon,
 
+      /** Distanza minima (m) di un punto nuovo da punti/segmenti esistenti. */
+      minClearance: DEFAULT_MIN_CLEARANCE,
+
+      setMinClearance: (v) => {
+        if (!(v >= 0)) return;
+        set({ minClearance: v });
+      },
+
       /** Aggiunge un punto (già in coordinate mondo), con snap alla griglia visibile. */
       addPoint: (worldPoint, snapSize) => {
-        const { stage1Polygon } = get();
+        const { stage1Polygon, minClearance } = get();
         if (stage1Polygon.closed) return;
         const snapped = snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize);
         const last = stage1Polygon.points[stage1Polygon.points.length - 1];
         // Ignora click sullo stesso punto (doppio click accidentale)
         if (last && last.x === snapped.x && last.y === snapped.y) return;
+        // Distanza minima da punti e segmenti esistenti
+        if (violatesClearance(stage1Polygon.points, snapped, minClearance)) return;
         set({
           stage1Polygon: {
             ...stage1Polygon,
@@ -102,7 +116,7 @@ export const useTrackStore = create(
        * (segmento i: points[i] → points[(i+1) % n]; n-1 = segmento di chiusura).
        */
       insertPointOnSegment: (segIndex, worldPoint, snapSize) => {
-        const { stage1Polygon } = get();
+        const { stage1Polygon, minClearance } = get();
         const pts = stage1Polygon.points;
         if (segIndex < 0 || segIndex >= pts.length) return;
         const snapped = snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize);
@@ -112,6 +126,15 @@ export const useTrackStore = create(
         if (
           (a.x === snapped.x && a.y === snapped.y) ||
           (b.x === snapped.x && b.y === snapped.y)
+        ) {
+          return;
+        }
+        // Distanza minima da punti/segmenti (escluso il segmento su cui si inserisce)
+        if (
+          violatesClearance(pts, snapped, minClearance, {
+            closed: stage1Polygon.closed,
+            excludeSegment: segIndex,
+          })
         ) {
           return;
         }

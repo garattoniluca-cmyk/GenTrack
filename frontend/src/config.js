@@ -6,6 +6,12 @@ export const WORLD_HALF_EXTENT = 2500;
 /** Dimensione griglia di default (metri). */
 export const DEFAULT_GRID_SIZE = 10;
 
+/**
+ * Distanza minima (metri) di un punto NUOVO da punti/segmenti esistenti.
+ * Configurabile dalla toolbar.
+ */
+export const DEFAULT_MIN_CLEARANCE = 50;
+
 /** Limiti di zoom (px per metro). Al minimo l'intera area 5000 m è visibile. */
 export const ZOOM_MIN = 0.08;
 export const ZOOM_MAX = 200;

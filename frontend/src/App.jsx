@@ -12,6 +12,8 @@ import {
 export default function App() {
   const polygon = useTrackStore((s) => s.stage1Polygon);
   const setGridSize = useTrackStore((s) => s.setGridSize);
+  const minClearance = useTrackStore((s) => s.minClearance);
+  const setMinClearance = useTrackStore((s) => s.setMinClearance);
   const undo = useTrackStore((s) => s.undo);
   const redo = useTrackStore((s) => s.redo);
   const historyPast = useTrackStore((s) => s.historyPast);
@@ -63,6 +65,17 @@ export default function App() {
             step="1"
             value={polygon.gridSize}
             onChange={(e) => setGridSize(parseFloat(e.target.value))}
+          />
+        </label>
+
+        <label title="Distanza minima di un punto nuovo da punti e segmenti esistenti">
+          Dist. min (m)
+          <input
+            type="number"
+            min="0"
+            step="10"
+            value={minClearance}
+            onChange={(e) => setMinClearance(parseFloat(e.target.value))}
           />
         </label>
 
