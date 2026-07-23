@@ -4,6 +4,9 @@
 import { useMemo, useState } from 'react';
 import GridCanvas from './components/editor2d/GridCanvas.jsx';
 import SplineEditor from './components/editor2d/SplineEditor.jsx';
+import FlowTubeEditor from './components/editor2d/FlowTubeEditor.jsx';
+import BankingEditor from './components/panels/BankingEditor.jsx';
+import ElevationProfile from './components/panels/ElevationProfile.jsx';
 import {
   useTrackStore,
   computeStage1Fingerprint,
@@ -15,6 +18,7 @@ import {
   canClose,
 } from './geometry/polygon.js';
 import { resampleFilletPath } from './geometry/spline.js';
+import { buildElevation } from './geometry/trackNoise.js';
 
 export default function App() {
   const phase = useTrackStore((s) => s.phase);
@@ -77,6 +81,16 @@ export default function App() {
     [resampled.corners]
   );
 
+  // Fase 3A: altimetria derivata (rumore periodico sul path)
+  const flowTube = useTrackStore((s) => s.stage3FlowTube);
+  const elevation = useMemo(
+    () =>
+      resampled.sampleCount >= 2
+        ? buildElevation(resampled.sampleCount, resampled.totalLength, flowTube.elevationNoise)
+        : null,
+    [resampled.sampleCount, resampled.totalLength, flowTube.elevationNoise]
+  );
+
   const startSegLength =
     polygon.startSegment != null
       ? (segments.find((s) => s.index === polygon.startSegment)?.length ?? 0)
@@ -88,11 +102,12 @@ export default function App() {
     polygon.closed && polygon.startSegment != null && !startTooShort;
 
   // modale interna di conferma rigenerazione (MAI window.confirm: bloccato
-  // negli ambienti embedded, fallirebbe in silenzio)
-  const [confirmRegenOpen, setConfirmRegenOpen] = useState(false);
+  // negli ambienti embedded, fallirebbe in silenzio).
+  // confirmRegenOpen = null | fase di destinazione (2 o 3)
+  const [confirmRegenOpen, setConfirmRegenOpen] = useState(null);
 
-  // ingresso in Fase 2: se il poligono è cambiato, i raggi override decadono
-  const goPhase2 = () => {
+  // ingresso in una fase derivata: se il poligono è cambiato, i bracci decadono
+  const goDerivedPhase = (target) => {
     if (!phase2Ready) return;
     const st = useTrackStore.getState();
     const fp = computeStage1Fingerprint(st.stage1Polygon);
@@ -101,17 +116,17 @@ export default function App() {
       st.stage2Spline.sourceFingerprint != null &&
       st.stage2Spline.sourceFingerprint !== fp;
     if (hasEdits) {
-      setConfirmRegenOpen(true);
+      setConfirmRegenOpen(target);
       return;
     }
     st.generateSplineFromPolygon();
-    setPhase(2);
+    setPhase(target);
   };
 
   const confirmRegen = () => {
     useTrackStore.getState().generateSplineFromPolygon(true);
-    setConfirmRegenOpen(false);
-    setPhase(2);
+    setPhase(confirmRegenOpen ?? 2);
+    setConfirmRegenOpen(null);
   };
 
   const status =
@@ -148,9 +163,21 @@ export default function App() {
                 ? 'Editing spline'
                 : 'Chiudi il poligono e imposta lo start per accedere'
             }
-            onClick={goPhase2}
+            onClick={() => goDerivedPhase(2)}
           >
             2 · Spline
+          </button>
+          <button
+            className={phase === 3 ? 'active' : ''}
+            disabled={!phase2Ready}
+            title={
+              phase2Ready
+                ? 'Sezione, banking e altimetria del tubo di flusso'
+                : 'Chiudi il poligono e imposta lo start per accedere'
+            }
+            onClick={() => goDerivedPhase(3)}
+          >
+            3A · Tubo 2D
           </button>
         </div>
 
@@ -248,10 +275,119 @@ export default function App() {
       </header>
 
       <main className="workspace">
-        {phase === 1 ? <GridCanvas /> : <SplineEditor />}
+        {phase === 1 ? (
+          <GridCanvas />
+        ) : phase === 2 ? (
+          <SplineEditor />
+        ) : (
+          <div className="canvas-with-charts">
+            <FlowTubeEditor resampled={resampled} elevation={elevation} />
+            <div className="charts-row">
+              <BankingEditor />
+              <ElevationProfile
+                elevation={elevation}
+                totalLength={resampled.totalLength}
+                maxSlopePct={flowTube.elevationNoise.maxSlopePct}
+              />
+            </div>
+          </div>
+        )}
 
         <aside className="side-panel">
-          {phase === 1 ? (
+          {phase === 3 ? (
+            <>
+              <h2>stage3_flowTube</h2>
+
+              <div className="param-group">
+                <h3>Sezione (fissa su tutto il tracciato)</h3>
+                {[
+                  ['trackWidth', 'Pista (m)', 1, 1],
+                  ['lineWidth', 'Riga bianca (m)', 0.05, 0.05],
+                  ['grassLeft', 'Erba SX (m)', 1, 1],
+                  ['grassRight', 'Erba DX (m)', 1, 1],
+                ].map(([key, label, min, step]) => (
+                  <label key={key} className="param-row">
+                    {label}
+                    <input
+                      type="number"
+                      min={min}
+                      step={step}
+                      value={flowTube.section[key]}
+                      onChange={(e) =>
+                        useTrackStore.getState().setSectionParam(key, parseFloat(e.target.value))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div className="param-group">
+                <h3>Altimetria (rumore)</h3>
+                {[
+                  ['amplitude', 'Ampiezza (m)', 0, 1],
+                  ['wavelength', 'Lungh. onda (m)', 50, 50],
+                  ['octaves', 'Ottave', 1, 1],
+                  ['persistence', 'Persistenza', 0.1, 0.05],
+                  ['lacunarity', 'Lacunarità', 1.1, 0.1],
+                  ['maxSlopePct', 'Pendenza max (%)', 0.5, 0.5],
+                  ['flattenStart', 'Spianam. start (0-1)', 0, 0.1],
+                ].map(([key, label, min, step]) => (
+                  <label key={key} className="param-row">
+                    {label}
+                    <input
+                      type="number"
+                      min={min}
+                      step={step}
+                      value={flowTube.elevationNoise[key]}
+                      onChange={(e) =>
+                        useTrackStore.getState().setNoiseParam(key, parseFloat(e.target.value))
+                      }
+                    />
+                  </label>
+                ))}
+                <div className="param-row">
+                  <span className="dim">Seed: {flowTube.elevationNoise.seed}</span>
+                  <button onClick={() => useTrackStore.getState().newNoiseSeed()}>
+                    🎲 Nuovo seed
+                  </button>
+                </div>
+              </div>
+
+              {elevation && (
+                <div className="param-group">
+                  <h3>Statistiche altimetria</h3>
+                  <div className="stats-grid">
+                    <span>Quota min/max</span>
+                    <b>
+                      {elevation.stats.minZ.toFixed(1)} / {elevation.stats.maxZ.toFixed(1)} m
+                    </b>
+                    <span>Dislivello salite</span>
+                    <b>{elevation.stats.gain.toFixed(0)} m</b>
+                    <span>Pendenza max</span>
+                    <b>{elevation.stats.maxSlopePct.toFixed(1)} %</b>
+                    {elevation.stats.amplitudeScale < 1 && (
+                      <>
+                        <span className="warn">Ampiezza ridotta</span>
+                        <b className="warn">
+                          ×{elevation.stats.amplitudeScale.toFixed(2)} (limite pendenza)
+                        </b>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="hints">
+                <h3>Comandi</h3>
+                <ul>
+                  <li><b>Grafico banking</b>: doppio click aggiunge, drag sposta, destro elimina</li>
+                  <li><b>🎲 Nuovo seed</b> — altra altimetria con gli stessi parametri</li>
+                  <li>Mezzeria colorata per quota (blu=basso, rosso=alto)</li>
+                  <li><b>Rotellina / Space+drag</b> — zoom / pan</li>
+                </ul>
+              </div>
+            </>
+          ) : phase === 1 ? (
             <>
               <h2>stage1_polygon</h2>
               <pre>{JSON.stringify(polygon, null, 2)}</pre>
@@ -304,8 +440,8 @@ export default function App() {
         </aside>
       </main>
 
-      {confirmRegenOpen && (
-        <div className="modal-overlay" onClick={() => setConfirmRegenOpen(false)}>
+      {confirmRegenOpen != null && (
+        <div className="modal-overlay" onClick={() => setConfirmRegenOpen(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <h3>Poligono modificato</h3>
             <p>
@@ -315,9 +451,9 @@ export default function App() {
               default ({useTrackStore.getState().stage2Spline.defaultArm} m).
             </p>
             <div className="modal-actions">
-              <button onClick={() => setConfirmRegenOpen(false)}>Annulla</button>
+              <button onClick={() => setConfirmRegenOpen(null)}>Annulla</button>
               <button className="primary" onClick={confirmRegen}>
-                Continua in Fase 2
+                Continua
               </button>
             </div>
           </div>
@@ -325,7 +461,40 @@ export default function App() {
       )}
 
       <footer className="statusbar">
-        {phase === 1 ? (
+        {phase === 3 ? (
+          <>
+            <span>
+              Lunghezza: <b>{resampled.totalLength.toFixed(0)} m</b>
+            </span>
+            <span>
+              Pista: <b>{flowTube.section.trackWidth} m</b> · erba{' '}
+              <b>
+                {flowTube.section.grassLeft}+{flowTube.section.grassRight} m
+              </b>
+            </span>
+            <span>
+              Banking kf: <b>{flowTube.bankingChannel.length}</b>
+            </span>
+            {elevation && (
+              <>
+                <span>
+                  Dislivello: <b>{(elevation.stats.maxZ - elevation.stats.minZ).toFixed(1)} m</b>
+                </span>
+                <span
+                  className={
+                    elevation.stats.maxSlopePct > flowTube.elevationNoise.maxSlopePct * 0.98
+                      ? 'warn'
+                      : 'ok'
+                  }
+                >
+                  Pendenza max: <b>{elevation.stats.maxSlopePct.toFixed(1)}%</b> /{' '}
+                  {flowTube.elevationNoise.maxSlopePct}%
+                </span>
+              </>
+            )}
+            <span className="dim">● 3A: sezione fissa · altimetria = verità</span>
+          </>
+        ) : phase === 1 ? (
           <>
             <span>
               Punti: <b>{polygon.points.length}</b>

@@ -3,10 +3,10 @@
 > Snapshot dello stato corrente. Aggiornare a ogni sessione di lavoro.
 > Ultimo aggiornamento: **2026-07-23**
 
-## Stato: FASE 2 IMPLEMENTATA (in validazione utente)
+## Stato: FASE 3A IMPLEMENTATA (in validazione utente)
 
-Editor poligonale (Fase 1) + editor spline (Fase 2) su http://localhost:5173.
-51 test unitari verdi (`geometry/polygon.js` + `geometry/spline.js`).
+Fase 1 (poligonale) + Fase 2 (stondature) + Fase 3A (sezione/banking/
+altimetria) su http://localhost:5173. **84 test unitari verdi**.
 
 ## Fatto
 
@@ -91,7 +91,23 @@ Editor poligonale (Fase 1) + editor spline (Fase 2) su http://localhost:5173.
       la geometria ESATTA (lineTo + quadraticCurveTo nativi, tassellati dal
       browser) → niente spezzate a nessuno zoom. I sample equidistanti restano
       solo per i calcoli; densità interna alzata (archi ~1 m, maxCount 5000).
-- [ ] Fase 2 (bracci asimmetrici): **validazione utente** in corso.
+- [x] 2026-07-23 — **Fase 3A implementata** (scope approvato: D-022, D-023):
+      - `geometry/channel.js` — canali keyframe periodici step/linear/smoothstep
+      - `geometry/trackNoise.js` — fBm periodico su cerchio (simplex-noise
+        4.0.3 installato), limite pendenza per riscalo globale, spianamento
+        start, deterministico (mulberry32)
+      - `geometry/offset.js` — bordi tubo (offset mezzeria); ATTENZIONE
+        semantica: percorrenza ccw → sinistra = interno curva
+      - 26 test nuovi → tot **84 verdi**
+      - Store: slice `stage3FlowTube` (section/bankingChannel/elevationNoise)
+        + azioni; history estesa
+      - UI: tab "3A · Tubo 2D", FlowTubeEditor (footprint erba/asfalto/righe,
+        mezzeria termica per quota, legenda), BankingEditor (SVG, dblclick/
+        drag/destro), ElevationProfile (SVG, colori per pendenza), pannello
+        parametri sezione+rumore+statistiche, statusbar 3A
+      - Schema stage3_flowTube riscritto (semplificato, rinvii documentati)
+      - Collaudo e2e: 4920 m, limitatore pendenza aggancia esattamente il 10%
+- [ ] Fase 3A: **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello

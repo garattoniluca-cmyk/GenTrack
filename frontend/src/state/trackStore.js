@@ -41,6 +41,30 @@ const snapClamp = (p, snapSize) => snapToGrid(clampToWorld(p), snapSize);
 export const computeStage1Fingerprint = (stage1) =>
   JSON.stringify([stage1.points, stage1.startSegment, stage1.direction]);
 
+const initialFlowTube = {
+  // sezione trasversale FISSA su tutto il tracciato (semplificazione 3A):
+  // [erba SX][riga][pista][riga][erba DX] — i muri arrivano in 3B
+  section: {
+    trackWidth: 12, // larghezza pista (m) — minimo FIA F1
+    lineWidth: 0.2, // riga bianca (m), dentro il bordo pista
+    grassLeft: 8, // fascia erba lato sinistro (m, verso di percorrenza)
+    grassRight: 8, // fascia erba lato destro (m)
+  },
+  // banking lungo s: SEMPRE input utente (D-002), canale periodico
+  bankingChannel: [{ s: 0, angleDeg: 0, transition: 'smoothstep' }],
+  // altimetria: parametri del rumore periodico (D-022) — z(s) è derivato puro
+  elevationNoise: {
+    seed: 12345,
+    amplitude: 25,
+    wavelength: 800,
+    octaves: 4,
+    persistence: 0.5,
+    lacunarity: 2.0,
+    maxSlopePct: 10,
+    flattenStart: 0.6,
+  },
+};
+
 const initialSpline = {
   defaultArm: 60, // braccio di default delle stondature (m)
   // override per-vertice: { [indiceVerticeOriginale]: {in: metri, out: metri} }
@@ -55,11 +79,12 @@ export const useTrackStore = create(
     (set, get) => ({
       stage1Polygon: initialPolygon,
       stage2Spline: initialSpline,
+      stage3FlowTube: initialFlowTube,
 
-      /** Fase attiva della pipeline nell'UI (1 = poligonale, 2 = spline). */
+      /** Fase attiva nell'UI (1 = poligonale, 2 = spline, 3 = tubo 2D). */
       phase: 1,
       setPhase: (p) => {
-        if (p !== 1 && p !== 2) return;
+        if (p !== 1 && p !== 2 && p !== 3) return;
         set({ phase: p });
       },
 
@@ -251,6 +276,85 @@ export const useTrackStore = create(
         set({ stage2Spline: { ...stage2Spline, arms } });
       },
 
+      // ---- Fase 3A: sezione, banking, altimetria ----
+
+      /** Parametro della sezione fissa (trackWidth/lineWidth/grassLeft/grassRight). */
+      setSectionParam: (key, v) => {
+        const { stage3FlowTube } = get();
+        if (!(key in stage3FlowTube.section)) return;
+        const min = key === 'lineWidth' ? 0.05 : 1;
+        if (!(v >= min)) return;
+        set({
+          stage3FlowTube: {
+            ...stage3FlowTube,
+            section: { ...stage3FlowTube.section, [key]: v },
+          },
+        });
+      },
+
+      /** Parametro del rumore altimetrico. */
+      setNoiseParam: (key, v) => {
+        const { stage3FlowTube } = get();
+        if (!(key in stage3FlowTube.elevationNoise)) return;
+        if (typeof v !== 'number' || !Number.isFinite(v)) return;
+        set({
+          stage3FlowTube: {
+            ...stage3FlowTube,
+            elevationNoise: { ...stage3FlowTube.elevationNoise, [key]: v },
+          },
+        });
+      },
+
+      /** Nuovo seed casuale per l'altimetria. */
+      newNoiseSeed: () => {
+        const { stage3FlowTube } = get();
+        set({
+          stage3FlowTube: {
+            ...stage3FlowTube,
+            elevationNoise: {
+              ...stage3FlowTube.elevationNoise,
+              seed: Math.floor(Math.random() * 2 ** 31),
+            },
+          },
+        });
+      },
+
+      /** Aggiunge un keyframe di banking (dal doppio click sul grafico). */
+      addBankingKeyframe: (s, angleDeg) => {
+        const { stage3FlowTube } = get();
+        const kf = {
+          s: Math.min(0.999, Math.max(0, s)),
+          angleDeg: Math.min(30, Math.max(-30, angleDeg)),
+          transition: 'smoothstep',
+        };
+        const next = [...stage3FlowTube.bankingChannel, kf].sort((a, b) => a.s - b.s);
+        set({ stage3FlowTube: { ...stage3FlowTube, bankingChannel: next } });
+      },
+
+      /** Aggiorna un keyframe di banking (drag sul grafico). */
+      updateBankingKeyframe: (index, patch) => {
+        const { stage3FlowTube } = get();
+        const kfs = stage3FlowTube.bankingChannel;
+        if (index < 0 || index >= kfs.length) return;
+        const kf = { ...kfs[index], ...patch };
+        kf.s = Math.min(0.999, Math.max(0, kf.s));
+        kf.angleDeg = Math.min(30, Math.max(-30, kf.angleDeg));
+        const next = kfs.slice();
+        next[index] = kf;
+        next.sort((a, b) => a.s - b.s);
+        set({ stage3FlowTube: { ...stage3FlowTube, bankingChannel: next } });
+      },
+
+      /** Rimuove un keyframe di banking (ne resta almeno uno). */
+      removeBankingKeyframe: (index) => {
+        const { stage3FlowTube } = get();
+        const kfs = stage3FlowTube.bankingChannel;
+        if (kfs.length <= 1 || index < 0 || index >= kfs.length) return;
+        const next = kfs.slice();
+        next.splice(index, 1);
+        set({ stage3FlowTube: { ...stage3FlowTube, bankingChannel: next } });
+      },
+
       /**
        * Sposta il punto `index`. snap=false durante il drag (movimento fluido),
        * snap=true al rilascio (aggancio alla griglia).
@@ -312,6 +416,7 @@ export const useTrackStore = create(
       partialize: (state) => ({
         stage1Polygon: state.stage1Polygon,
         stage2Spline: state.stage2Spline,
+        stage3FlowTube: state.stage3FlowTube,
       }),
     }
   )

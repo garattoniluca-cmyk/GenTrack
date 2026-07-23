@@ -31,7 +31,10 @@
 | `polygon.test.js` | 25 test sugli invarianti | 1 | ✅ |
 | `spline.js` | Mezzeria fillet: rettilinei esatti + raccordi ad arco tangenti, clamp raggi, arc-length resampling adattivo, s=0 a metà start (D-018) | 2 | 🧪 |
 | `spline.test.js` | 17 test sugli invarianti (rettilinei esatti, archi sul cerchio, lunghezza analitica, verso, clamp) | 2 | ✅ |
-| `frame.js` | Parallel-transport frame lungo la curva | 3 | ⏳ |
+| `frame.js` | Parallel-transport frame lungo la curva | 3B | ⏳ |
+| `channel.js` | Canali keyframe periodici (step/linear/smoothstep) — generico | 3A | 🧪 |
+| `trackNoise.js` | Altimetria: fBm periodico su cerchio, limite pendenza, spianamento start (D-022) | 3A | 🧪 |
+| `offset.js` | Bordi tubo: offset mezzeria (sinistra=+, ccw→interno) | 3A | 🧪 |
 | `curvature.js` | Stima curvatura + euristica velocità `v=sqrt(a_lat/κ)` | 5 (usata anche in 4) | ⏳ |
 | `sectionProfile.js` | Profili trasversali (wall_edge, secondary_surface), interpolazione | 3 | ⏳ |
 | `widthChannel.js` | Canale larghezza (step/lerp/smoothstep) | 3 | ⏳ |
@@ -53,7 +56,9 @@
 | `editor2d/useCanvasView.js` | Hook vista condivisa: fit, zoom, pan, conversioni y-up, scalebar | — | ✅ |
 | `editor2d/GridLayer.jsx` | Griglia + bordo area, render solo viewport | — | ✅ |
 | `editor2d/colors.js` | Palette condivisa editor | — | ✅ |
-| `editor2d/ChannelEditor.jsx` | Grafici s→width/bank/elevation | 3 | ⏳ |
+| `editor2d/FlowTubeEditor.jsx` | Fase 3A: footprint tubo (erba/asfalto/righe), mezzeria termica per quota | 3A | ✅ |
+| `panels/BankingEditor.jsx` | Editor grafico canale banking (SVG, keyframe interattivi) | 3A | ✅ |
+| `panels/ElevationProfile.jsx` | Profilo altimetrico s→z colorato per pendenza | 3A | ✅ |
 | `viewer3d/Scene.jsx` | Scena r3f | 7 | ⏳ |
 | `viewer3d/TrackMesh.jsx` | Render tubo di flusso (multi-material/vertex colors) | 7 | ⏳ |
 | `viewer3d/TerrainMesh.jsx` | Render terreno (shading altezza/pendenza) | 7 | ⏳ |

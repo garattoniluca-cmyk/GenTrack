@@ -76,78 +76,44 @@
 
     "stage3_flowTube": {
       "type": "object",
+      "description": "Fase 3A semplificata (D-023): sezione FISSA su tutto il tracciato, banking a keyframe, altimetria da rumore periodico (= verità altimetrica del circuito). RINVIATI a versioni future: widthChannel variabile, sectionProfiles variabili, marshalGates, elevationChannel manuale. I muri verticali a fine erba sono resi in 3B (estrusione).",
       "properties": {
-        "widthChannel": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["s", "value"],
-            "properties": {
-              "s": { "$ref": "#/definitions/sNorm" },
-              "value": { "type": "number", "exclusiveMinimum": 0 },
-              "transition": { "$ref": "#/definitions/transition" }
-            }
+        "section": {
+          "type": "object",
+          "description": "Sezione trasversale costante: [erba SX][riga][pista][riga][erba DX]",
+          "required": ["trackWidth", "lineWidth", "grassLeft", "grassRight"],
+          "properties": {
+            "trackWidth": { "type": "number", "exclusiveMinimum": 0, "default": 12 },
+            "lineWidth": { "type": "number", "exclusiveMinimum": 0, "default": 0.2 },
+            "grassLeft": { "type": "number", "exclusiveMinimum": 0, "default": 8 },
+            "grassRight": { "type": "number", "exclusiveMinimum": 0, "default": 8 }
           }
         },
         "bankingChannel": {
           "type": "array",
+          "description": "Canale periodico a keyframe, SEMPRE input utente (D-002)",
           "items": {
             "type": "object",
             "required": ["s", "angleDeg"],
             "properties": {
               "s": { "$ref": "#/definitions/sNorm" },
-              "angleDeg": { "type": "number" },
+              "angleDeg": { "type": "number", "minimum": -30, "maximum": 30 },
               "transition": { "$ref": "#/definitions/transition" }
             }
           }
         },
-        "elevationChannel": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["s", "height"],
-            "properties": {
-              "s": { "$ref": "#/definitions/sNorm" },
-              "height": { "type": "number" },
-              "transition": { "$ref": "#/definitions/transition" }
-            }
-          }
-        },
-        "sectionProfiles": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["s", "profileType"],
-            "properties": {
-              "s": { "$ref": "#/definitions/sNorm" },
-              "profileType": { "enum": ["wall_edge", "secondary_surface"] },
-              "wallHeight": { "type": "number", "minimum": 0 },
-              "secondarySurface": {
-                "oneOf": [
-                  { "type": "null" },
-                  {
-                    "type": "object",
-                    "required": ["material", "width"],
-                    "properties": {
-                      "material": { "enum": ["grass", "sand", "gravel"] },
-                      "width": { "type": "number", "exclusiveMinimum": 0 }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "marshalGates": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["s", "width", "side"],
-            "properties": {
-              "s": { "$ref": "#/definitions/sNorm" },
-              "width": { "type": "number", "exclusiveMinimum": 0 },
-              "side": { "$ref": "#/definitions/side" }
-            }
+        "elevationNoise": {
+          "type": "object",
+          "description": "Parametri del rumore altimetrico periodico (D-022): z(s) è derivato deterministico da questi parametri, fBm simplex campionato su cerchio, ampiezza riscalata per rispettare maxSlopePct",
+          "properties": {
+            "seed": { "type": "integer" },
+            "amplitude": { "type": "number", "minimum": 0 },
+            "wavelength": { "type": "number", "exclusiveMinimum": 0 },
+            "octaves": { "type": "integer", "minimum": 1, "maximum": 8 },
+            "persistence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+            "lacunarity": { "type": "number", "exclusiveMinimum": 1 },
+            "maxSlopePct": { "type": "number", "exclusiveMinimum": 0 },
+            "flattenStart": { "type": "number", "minimum": 0, "maximum": 1 }
           }
         }
       }

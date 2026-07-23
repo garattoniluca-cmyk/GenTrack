@@ -239,6 +239,32 @@ Bézier quadratica è la più semplice che garantisce C1.
 bracci uguali (la Bézier quadratica simmetrica è una parabola ≈ arco per
 angoli non estremi — differenza trascurabile a queste scale).
 
+### D-022 — L'altimetria di Fase 3A è la VERITÀ altimetrica del circuito
+**Data**: 2026-07-23 (principio posto dall'utente)
+**Decisione**: le quote z(s) definite dal rumore in Fase 3A sono le quote
+reali della pista. Le fasi successive cuciranno il terreno procedurale DAL
+tubo di flusso VERSO l'esterno — mai il contrario (coerente con D-001).
+Il rumore è: fBm simplex 2D campionato lungo un CERCHIO (periodicità e
+derivabilità garantite per costruzione, nessuna cucitura a s=0), media
+sottratta, maschera smoothstep di spianamento start, ampiezza riscalata
+GLOBALMENTE se la pendenza supera il limite (mai clamping locale: creerebbe
+punti di non-derivabilità). Deterministico dal seed (mulberry32).
+**Motivazione**: i parametri del rumore vanno regolati ora, in 2D, con
+profilo altimetrico e statistiche (pendenza max, dislivello) compatibili
+con un circuito F1 (limite default 10%).
+
+### D-023 — Fase 3 divisa in 3A (dati, 2D) e 3B (estrusione 3D)
+**Data**: 2026-07-23 (richiesta utente)
+**Decisione**: 3A = sezione trasversale FISSA ([erba SX][riga][pista][riga]
+[erba DX], larghezze costanti su tutto il tracciato), banking a keyframe
+(editor grafico, D-002 rispettata), altimetria (D-022), footprint 2D del
+tubo con mezzeria colorata per quota. 3B = estrusione 3D del tubo con muri
+verticali a fine erba. RINVIATI: marshal gates, larghezze variabili,
+profili sezione variabili, Fase 4 (chicane) e Fase 5 (vie di fuga).
+Defaults sezione: pista 12 m (min FIA), riga 0.2 m, erba 8+8 m.
+**Motivazione**: semplificare per arrivare presto al 3D con dati solidi;
+i canali variabili si reintroducono quando la pipeline regge.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD
