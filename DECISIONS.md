@@ -418,6 +418,14 @@ qualsiasi tool: i tornanti reali RESTRINGONO il verge interno.
    resta intatto e torna appena il raggio lo consente.
 **Costanti**: INNER_MARGIN 1.5 m, MIN_VERGE 0.5 m, VERGE_SLEW 0.5 m/m
 (flowTubeMesh.js). Il footprint 2D (3A) mostra ancora larghezze nominali.
+**Rev. 2 (2026-07-23, proposta dell'utente)**: all'APICE il MURO INTERNO
+viene SPEZZATO — negli anelli dove la curvatura limita attivamente il
+verge (clamped pre-slew) i quad del muro non vengono emessi: le due ali
+di muro terminano con bordi di taglio netti ai lati dell'apice (come i
+muretti dei tornanti reali) invece di piegarsi attorno a un arco da
+1.5 m (era l'ultimo artefatto visibile). Implementato con `quadFilter`
+in buildRibbon; erba e asfalto restano continui. Test: rimozione solo
+all'apice (>90% muro intatto), zero triangoli degeneri nei muri.
 
 <!-- Template nuova decisione:
 ### D-0XX — Titolo

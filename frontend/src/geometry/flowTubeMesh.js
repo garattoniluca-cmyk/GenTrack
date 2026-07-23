@@ -64,7 +64,12 @@ export function signedCurvature(samples) {
  * Larghezze erba EFFETTIVE per anello: sul lato interno della curva la
  * larghezza è limitata a (R_locale − margine − w), con minimo MIN_VERGE,
  * e la variazione lungo s è rate-limitata (VERGE_SLEW) per un cuneo
- * progressivo come nei verge reali. Ritorna { effL, effR }.
+ * progressivo come nei verge reali.
+ * Ritorna { effL, effR, clampedL, clampedR }: clamped* marca gli anelli
+ * dove la CURVATURA limita attivamente la larghezza (pre-slew) — lì il
+ * muro interno viene SPEZZATO (D-028 rev.2): le ali di muro terminano ai
+ * lati dell'apice con bordi netti invece di piegarsi attorno a un arco
+ * minuscolo (la piega era l'ultimo artefatto visibile nei tornanti).
  */
 export function computeVergeWidths(samples, section, totalLength) {
   const n = samples.length;
@@ -72,14 +77,18 @@ export function computeVergeWidths(samples, section, totalLength) {
   const kappa = signedCurvature(samples);
   const effL = new Array(n).fill(section.grassLeft);
   const effR = new Array(n).fill(section.grassRight);
+  const clampedL = new Array(n).fill(false);
+  const clampedR = new Array(n).fill(false);
   for (let i = 0; i < n; i++) {
     const k = kappa[i];
     if (k > 1e-6) {
       // svolta a sinistra → interno a SINISTRA
       const avail = 1 / k - INNER_MARGIN - w;
+      if (avail < section.grassLeft) clampedL[i] = true;
       effL[i] = Math.min(section.grassLeft, Math.max(MIN_VERGE, avail));
     } else if (k < -1e-6) {
       const avail = 1 / -k - INNER_MARGIN - w;
+      if (avail < section.grassRight) clampedR[i] = true;
       effR[i] = Math.min(section.grassRight, Math.max(MIN_VERGE, avail));
     }
   }
@@ -98,7 +107,7 @@ export function computeVergeWidths(samples, section, totalLength) {
       }
     }
   }
-  return { effL, effR };
+  return { effL, effR, clampedL, clampedR };
 }
 
 const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -117,14 +126,17 @@ const norm = (v) => {
  * destro rispetto alla marcia). Winding CCW visto dal lato della normale.
  * normals: array per-anello [nx,ny,nz] (condiviso dai due vertici).
  * flip: inverte il winding (per facce che guardano dall'altra parte).
+ * quadFilter(i): se ritorna false, il quad tra l'anello i e i+1 NON viene
+ * emesso (usato per SPEZZARE il muro interno all'apice delle curve secche
+ * — i vertici restano, le facce no: bordi di taglio netti).
  * uv: u = metri lungo il tracciato, v = 0 (A) / 1 (B).
  */
-export function buildRibbon(railA, railB, normals, totalLength, flip = false) {
+export function buildRibbon(railA, railB, normals, totalLength, flip = false, quadFilter = null) {
   const n = railA.length;
   const positions = new Float32Array(n * 2 * 3);
   const nrm = new Float32Array(n * 2 * 3);
   const uvs = new Float32Array(n * 2 * 2);
-  const indices = new Uint32Array(n * 6);
+  const idx = [];
 
   for (let i = 0; i < n; i++) {
     const u = (i / n) * totalLength;
@@ -137,17 +149,18 @@ export function buildRibbon(railA, railB, normals, totalLength, flip = false) {
     uvs[i * 4 + 2] = u;
     uvs[i * 4 + 3] = 1;
 
+    if (quadFilter && !quadFilter(i)) continue;
     const a = i * 2;
     const b = i * 2 + 1;
     const a1 = ((i + 1) % n) * 2;
     const b1 = ((i + 1) % n) * 2 + 1;
     if (!flip) {
-      indices.set([a, b, b1, a, b1, a1], i * 6);
+      idx.push(a, b, b1, a, b1, a1);
     } else {
-      indices.set([a, b1, b, a, a1, b1], i * 6);
+      idx.push(a, b1, b, a, a1, b1);
     }
   }
-  return { positions, normals: nrm, uvs, indices };
+  return { positions, normals: nrm, uvs, indices: new Uint32Array(idx) };
 }
 
 /** Concatena più geometrie indicizzate in una (per materiale condiviso). */
@@ -198,9 +211,12 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
     P[i] = [samples[i].x, z[i], -samples[i].y];
   }
 
-  // curve secche (D-028): larghezze erba effettive per anello
+  // curve secche (D-028): larghezze erba effettive per anello + zone dove
+  // il muro interno va SPEZZATO (apice: curvatura che limita attivamente)
   const tLen = totalLen(samples);
-  const { effL, effR } = computeVergeWidths(samples, section, tLen);
+  const { effL, effR, clampedL, clampedR } = computeVergeWidths(samples, section, tLen);
+  const wallQuadL = (i) => !(clampedL[i] || clampedL[(i + 1) % n]);
+  const wallQuadR = (i) => !(clampedR[i] || clampedR[(i + 1) % n]);
 
   // rail per fascia (condivisi al bit tra fasce adiacenti)
   const rWallLTop = new Array(n);
@@ -286,10 +302,11 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
       buildRibbon(rLineROut, rGrassROut, grassRN, tLen),
     ]),
     walls: mergeIndexed([
-      // muro SX: faccia interna verso destra (−L) → winding flip
-      buildRibbon(rWallLTop, rGrassLOut, rightN, tLen, true),
+      // muro SX: faccia interna verso destra (−L) → winding flip;
+      // spezzato dove la curvatura strizza il lato (D-028 rev.2)
+      buildRibbon(rWallLTop, rGrassLOut, rightN, tLen, true, wallQuadL),
       // muro DX: faccia interna verso sinistra (+L)
-      buildRibbon(rWallRTop, rGrassROut, leftN, tLen, false),
+      buildRibbon(rWallRTop, rGrassROut, leftN, tLen, false, wallQuadR),
     ]),
   };
 

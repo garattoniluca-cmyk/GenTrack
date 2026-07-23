@@ -304,6 +304,29 @@ describe('curve secche (D-028): verge interno che si restringe', () => {
     expect(flipped).toBe(0);
   });
 
+  it('MURO INTERNO SPEZZATO all\'apice (D-028 rev.2): niente pieghe, bordi netti', () => {
+    const hairpinPath = resampleFilletPath(square, 0, 'ccw', { 2: { in: 15, out: 15 } }, 150);
+    const hN = hairpinPath.sampleCount;
+    const m = buildFlowTubeMesh(
+      hairpinPath.samples,
+      new Array(hN).fill(0),
+      new Array(hN).fill(0),
+      SECTION
+    );
+    const walls = m.bands.walls;
+    // qualche quad di muro è stato rimosso all'apice…
+    expect(walls.indices.length).toBeLessThan(12 * hN);
+    // …ma solo lì: almeno il 95% del muro resta
+    expect(walls.indices.length).toBeGreaterThan(12 * hN * 0.9);
+    // e i triangoli rimasti sono tutti sani (la piega era all'apice)
+    expect(minTriangleArea(walls)).toBeGreaterThan(1e-6);
+  });
+
+  it('senza curve secche il muro resta INTERO', () => {
+    const wallsFull = mesh.bands.walls; // quadrato con stondature R~106
+    expect(wallsFull.indices.length).toBe(12 * N);
+  });
+
   it('densità adattiva: il tornante infittisce gli anelli', () => {
     const normal = resampleFilletPath(square, 0, 'ccw', {}, 150);
     const hairpin = resampleFilletPath(square, 0, 'ccw', { 2: { in: 15, out: 15 } }, 150);

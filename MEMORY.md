@@ -194,7 +194,14 @@ http://localhost:5173. **112 test unitari verdi**.
       se R < w+1.5). Test: tornante bracci 15 → zero triangoli ribaltati,
       cerchio R12 → verge 4.5 m esatto, slew rispettato, +11 test (tot
       **128 verdi**). Live: tornante con 2542 anelli senza errori.
+- [x] 2026-07-23 — **Muro interno spezzato all'apice** (D-028 rev.2, idea
+      dell'utente: "basta fare un angolo e spezzare il muro interno"):
+      quadFilter in buildRibbon salta i quad del muro negli anelli
+      curvature-clamped → ali di muro con bordi netti ai lati dell'apice,
+      via l'ultima piega visibile. +2 test (tot **130 verdi**).
 - [ ] Fase 3B: **validazione utente** in corso (tornante + rampe bank ≥89 m).
+- ⚠ La persistenza JSON è sempre più urgente: ogni aggiornamento del codice
+      resetta il tracciato dell'utente (successo ripetutamente oggi).
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
