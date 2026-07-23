@@ -67,6 +67,20 @@ export const useTrackStore = create(
         });
       },
 
+      /**
+       * Rimuove un punto qualsiasi (tasto destro sul vertice).
+       * Un poligono chiuso non può scendere sotto i 3 punti.
+       */
+      removePoint: (index) => {
+        const { stage1Polygon } = get();
+        const pts = stage1Polygon.points;
+        if (index < 0 || index >= pts.length) return;
+        if (stage1Polygon.closed && pts.length <= 3) return;
+        const next = pts.slice();
+        next.splice(index, 1);
+        set({ stage1Polygon: { ...stage1Polygon, points: next } });
+      },
+
       /** Chiude il poligono se valido (≥3 punti, nessuna self-intersection). */
       closePolygon: () => {
         const { stage1Polygon } = get();

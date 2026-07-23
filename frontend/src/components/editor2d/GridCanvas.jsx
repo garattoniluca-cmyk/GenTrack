@@ -66,6 +66,7 @@ export default function GridCanvas() {
   const removeLastPoint = useTrackStore((s) => s.removeLastPoint);
   const closePolygon = useTrackStore((s) => s.closePolygon);
   const updatePoint = useTrackStore((s) => s.updatePoint);
+  const removePoint = useTrackStore((s) => s.removePoint);
   const insertPointOnSegment = useTrackStore((s) => s.insertPointOnSegment);
   const beginBatch = useTrackStore((s) => s.beginBatch);
   const endBatch = useTrackStore((s) => s.endBatch);
@@ -101,12 +102,18 @@ export default function GridCanvas() {
     return () => ro.disconnect();
   }, []);
 
-  // --- centro vista iniziale sull'origine (alla prima misura reale del container) ---
+  // --- vista iniziale: TUTTA l'area 5000×5000 m visibile, centrata sull'origine ---
   const centeredRef = useRef(false);
   useEffect(() => {
     if (centeredRef.current || size.width === 0) return;
     centeredRef.current = true;
-    setView((v) => ({ ...v, x: size.width / 2, y: size.height / 2 }));
+    const fitScale =
+      (Math.min(size.width, size.height) / (2 * WORLD_HALF_EXTENT)) * 0.95;
+    setView({
+      x: size.width / 2,
+      y: size.height / 2,
+      scale: Math.max(ZOOM_MIN, fitScale),
+    });
   }, [size]);
 
   // --- tastiera: Esc rimuove ultimo punto, Space attiva pan ---
@@ -243,6 +250,13 @@ export default function GridCanvas() {
     if (w) insertPointOnSegment(segIndex, w, effGrid);
   };
 
+  // --- tasto destro su un vertice: elimina il punto ---
+  const onVertexContextMenu = (i) => (e) => {
+    e.evt.preventDefault();
+    e.cancelBubble = true;
+    removePoint(i);
+  };
+
   // --- dati derivati per il render ---
   const snappedCursor = cursorWorld && !closed ? snapToGrid(cursorWorld, effGrid) : null;
 
@@ -340,6 +354,7 @@ export default function GridCanvas() {
     <div
       ref={containerRef}
       className="canvas-container"
+      onContextMenu={(e) => e.preventDefault()} // il tasto destro è dell'app, non del browser
       style={{
         cursor: spacePan
           ? 'grab'
@@ -505,6 +520,7 @@ export default function GridCanvas() {
                 onDragStart={onVertexDragStart}
                 onDragMove={onVertexDragMove(i)}
                 onDragEnd={onVertexDragEnd(i)}
+                onContextMenu={onVertexContextMenu(i)}
                 onMouseEnter={(e) => {
                   e.target.getStage().container().style.cursor = 'move';
                 }}

@@ -113,6 +113,7 @@ export default function App() {
               <li><b>Click</b> — aggiungi punto</li>
               <li><b>Click sul primo punto</b> — chiudi</li>
               <li><b>Drag su un vertice</b> — sposta punto</li>
+              <li><b>Tasto destro su un vertice</b> — elimina punto</li>
               <li><b>Click su un segmento</b> (chiuso) — inserisci punto</li>
               <li><b>Esc</b> — rimuovi ultimo punto</li>
               <li><b>Rotellina</b> — zoom</li>

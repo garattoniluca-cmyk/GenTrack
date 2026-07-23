@@ -40,6 +40,9 @@ Editor poligonale 2D funzionante su http://localhost:5173 (`npm run dev` in
 - [x] 2026-07-23 — **Distanza minima punti nuovi** 50 m configurabile (D-014):
       rifiuto aggiunta/inserimento se troppo vicino a punti o segmenti;
       feedback rosso + raggio di rispetto. 35 test verdi.
+- [x] 2026-07-23 — Vista iniziale = **fit dell'intera area 5000×5000 m**;
+      **tasto destro riservato all'app** (menu browser soppresso): per ora
+      destro su vertice = elimina punto (chiuso: mai sotto 3 punti).
 - [ ] Fase 1: **validazione visiva/interattiva dell'utente** in corso.
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —
