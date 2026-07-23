@@ -4,7 +4,12 @@
 
 import { create } from 'zustand';
 import { withHistory } from './historyMiddleware.js';
-import { snapToGrid, canClose, violatesClearance } from '../geometry/polygon.js';
+import {
+  snapToGrid,
+  canClose,
+  violatesClearance,
+  signedArea,
+} from '../geometry/polygon.js';
 import {
   DEFAULT_GRID_SIZE,
   DEFAULT_MIN_CLEARANCE,
@@ -15,6 +20,8 @@ const initialPolygon = {
   points: [], // [{x, y}] in metri, y-up
   gridSize: DEFAULT_GRID_SIZE,
   closed: false,
+  startSegment: null, // indice segmento start/finish (i: points[i] → points[(i+1)%n])
+  direction: null, // verso di percorrenza: 'cw' (orario) | 'ccw' (antiorario)
 };
 
 /**
@@ -74,20 +81,61 @@ export const useTrackStore = create(
       removePoint: (index) => {
         const { stage1Polygon } = get();
         const pts = stage1Polygon.points;
-        if (index < 0 || index >= pts.length) return;
-        if (stage1Polygon.closed && pts.length <= 3) return;
+        const n = pts.length;
+        if (index < 0 || index >= n) return;
+        if (stage1Polygon.closed && n <= 3) return;
         const next = pts.slice();
         next.splice(index, 1);
-        set({ stage1Polygon: { ...stage1Polygon, points: next } });
+        // Rimappa startSegment: rimuovere il punto k fonde i segmenti k-1 e k.
+        let s = stage1Polygon.startSegment;
+        if (s != null) {
+          if (index === 0) {
+            // fusione tra il segmento di chiusura (n-1) e il segmento 0
+            s = s === 0 || s === n - 1 ? next.length - 1 : s - 1;
+          } else if (s === index - 1 || s === index) {
+            s = index - 1; // il segmento fuso
+          } else if (s > index) {
+            s = s - 1;
+          }
+          if (s >= next.length) s = next.length - 1;
+        }
+        set({ stage1Polygon: { ...stage1Polygon, points: next, startSegment: s } });
       },
 
-      /** Chiude il poligono se valido (≥3 punti, nessuna self-intersection). */
+      /**
+       * Chiude il poligono se valido (≥3 punti, nessuna self-intersection).
+       * Il verso di default è quello con cui l'utente ha disegnato
+       * (winding via area con segno, y-up: positiva = antiorario).
+       */
       closePolygon: () => {
         const { stage1Polygon } = get();
         if (stage1Polygon.closed) return false;
         if (!canClose(stage1Polygon.points)) return false;
-        set({ stage1Polygon: { ...stage1Polygon, closed: true } });
+        const defaultDirection =
+          signedArea(stage1Polygon.points) > 0 ? 'ccw' : 'cw';
+        set({
+          stage1Polygon: {
+            ...stage1Polygon,
+            closed: true,
+            direction: stage1Polygon.direction ?? defaultDirection,
+          },
+        });
         return true;
+      },
+
+      /** Imposta il segmento di start/finish (dal menu contestuale). */
+      setStartSegment: (segIndex) => {
+        const { stage1Polygon } = get();
+        const n = stage1Polygon.points.length;
+        if (!stage1Polygon.closed || segIndex < 0 || segIndex >= n) return;
+        set({ stage1Polygon: { ...stage1Polygon, startSegment: segIndex } });
+      },
+
+      /** Imposta il verso di percorrenza: 'cw' (orario) | 'ccw' (antiorario). */
+      setDirection: (direction) => {
+        if (direction !== 'cw' && direction !== 'ccw') return;
+        const { stage1Polygon } = get();
+        set({ stage1Polygon: { ...stage1Polygon, direction } });
       },
 
       /** Riapre un poligono chiuso per continuare l'editing. */
@@ -154,7 +202,11 @@ export const useTrackStore = create(
         }
         const next = pts.slice();
         next.splice(segIndex + 1, 0, snapped);
-        set({ stage1Polygon: { ...stage1Polygon, points: next } });
+        // Rimappa startSegment: l'inserimento sul segmento i lo divide in i e
+        // i+1; lo start resta sulla prima metà, gli indici successivi scalano.
+        let s = stage1Polygon.startSegment;
+        if (s != null && s > segIndex) s = s + 1;
+        set({ stage1Polygon: { ...stage1Polygon, points: next, startSegment: s } });
       },
     }),
     {

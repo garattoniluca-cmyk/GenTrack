@@ -18,7 +18,15 @@
           "items": { "$ref": "#/definitions/point2" }
         },
         "gridSize": { "type": "number", "exclusiveMinimum": 0 },
-        "closed": { "type": "boolean" }
+        "closed": { "type": "boolean" },
+        "startSegment": {
+          "oneOf": [{ "type": "null" }, { "type": "integer", "minimum": 0 }],
+          "description": "Indice del segmento start/finish (segmento i: points[i] → points[(i+1) % n])"
+        },
+        "direction": {
+          "oneOf": [{ "type": "null" }, { "enum": ["cw", "ccw"] }],
+          "description": "Verso di percorrenza: cw = orario, ccw = antiorario"
+        }
       }
     },
 

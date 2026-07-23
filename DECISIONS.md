@@ -142,6 +142,21 @@ esistenti non è soggetto al vincolo.
 **Motivazione**: spaziatura minima garantisce qualità della spline in Fase 2
 (niente cluster di control point né passaggi ravvicinati).
 
+### D-015 — Start su segmento e verso di percorrenza definiti in Fase 1
+**Data**: 2026-07-23 (richiesta utente)
+**Decisione**: lo start/finish è un **segmento** del poligono chiuso, scelto
+col tasto destro → "Imposta come start" (menu contestuale sui segmenti).
+Il **verso di percorrenza** (`direction`: 'cw' orario | 'ccw' antiorario) si
+sceglie dal toggle in toolbar; il default alla chiusura è il winding con cui
+l'utente ha disegnato (area con segno, y-up: positiva = antiorario).
+Entrambi salvati in `stage1_polygon` (schema aggiornato: `startSegment`,
+`direction`). Render: linea a scacchi bianco/nero + etichetta START + freccia
+gialla del verso. Gli indici di startSegment vengono **rimappati** a ogni
+inserimento/rimozione di punti.
+**Motivazione**: il verso determina il lato esterno (vie di fuga), il segno
+del banking e l'orientamento delle chicane nelle fasi successive; va fissato
+alla fonte. Lo start dà l'origine dell'ascissa curvilinea s=0 in Fase 2.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD

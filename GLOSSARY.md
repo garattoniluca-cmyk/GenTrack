@@ -43,6 +43,14 @@
 - **Marshal gate (apertura commissari)** — varco nel muro esterno in
   [s−halfWidth, s+halfWidth]; override locale del profilo, non modifica permanente.
 - **Mezzeria** — linea centrale della pista (la spline stessa).
+- **Start (segmento di)** — segmento del poligono scelto come linea di
+  start/finish (`stage1_polygon.startSegment`); in Fase 2 diventa l'origine
+  dell'ascissa curvilinea (s = 0).
+- **Verso di percorrenza (direction)** — 'cw' (orario) o 'ccw' (antiorario);
+  determina il lato esterno delle curve, il segno del banking e
+  l'orientamento degli elementi nelle fasi successive.
+- **Winding** — ordine di avvolgimento dei punti disegnati, calcolato con
+  l'area con segno (shoelace); default del verso alla chiusura.
 - **Bordo esterno effettivo** — polyline densa precalcolata del bordo esterno
   reale (larghezza variabile + vie di fuga incluse); riferimento per la
   proiezione del terreno.

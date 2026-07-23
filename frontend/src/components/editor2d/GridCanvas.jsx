@@ -13,7 +13,7 @@
 //   drag rotellina o Space+drag → pan
 
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import { Stage, Layer, Line, Circle, Text, Group } from 'react-konva';
+import { Stage, Layer, Line, Circle, Text, Group, Arrow } from 'react-konva';
 import { useTrackStore } from '../../state/trackStore.js';
 import {
   snapToGrid,
@@ -25,6 +25,7 @@ import {
   canClose,
   dist,
   violatesClearance,
+  signedArea,
 } from '../../geometry/polygon.js';
 import {
   WORLD_HALF_EXTENT,
@@ -70,6 +71,7 @@ export default function GridCanvas() {
   const updatePoint = useTrackStore((s) => s.updatePoint);
   const removePoint = useTrackStore((s) => s.removePoint);
   const insertPointOnSegment = useTrackStore((s) => s.insertPointOnSegment);
+  const setStartSegment = useTrackStore((s) => s.setStartSegment);
   const beginBatch = useTrackStore((s) => s.beginBatch);
   const endBatch = useTrackStore((s) => s.endBatch);
   const minClearance = useTrackStore((s) => s.minClearance);
@@ -272,7 +274,16 @@ export default function GridCanvas() {
     e.evt.preventDefault();
     e.cancelBubble = true;
     const pos = stageRef.current.getPointerPosition();
-    if (pos) setCtxMenu({ x: pos.x, y: pos.y, pointIndex: i });
+    if (pos) setCtxMenu({ kind: 'vertex', index: i, x: pos.x, y: pos.y });
+  };
+
+  // --- tasto destro su un segmento (poligono chiuso): menu con "Imposta start" ---
+  const onSegmentContextMenu = (segIndex) => (e) => {
+    e.evt.preventDefault();
+    if (!closed) return;
+    e.cancelBubble = true;
+    const pos = stageRef.current.getPointerPosition();
+    if (pos) setCtxMenu({ kind: 'segment', index: segIndex, x: pos.x, y: pos.y });
   };
 
   // il punto è eliminabile? (un poligono chiuso non scende sotto 3 punti)
@@ -371,6 +382,25 @@ export default function GridCanvas() {
   const vertexR = 5 / view.scale;
   const fontSize = 11 / view.scale;
 
+  // --- marker START + verso di percorrenza ---
+  const startSeg =
+    closed && polygon.startSegment != null
+      ? segments.find((s) => s.index === polygon.startSegment) ?? null
+      : null;
+  let travelDir = null; // versore di percorrenza sul segmento start
+  if (startSeg && polygon.direction && startSeg.length > 0) {
+    // l'ordine dei punti percorre il poligono nel winding dato da signedArea;
+    // se il verso scelto non coincide, si percorre in ordine inverso
+    const windingCcw = signedArea(points) > 0;
+    const forward = (polygon.direction === 'ccw') === windingCcw;
+    const from = forward ? startSeg.a : startSeg.b;
+    const to = forward ? startSeg.b : startSeg.a;
+    travelDir = {
+      x: (to.x - from.x) / startSeg.length,
+      y: (to.y - from.y) / startSeg.length,
+    };
+  }
+
   return (
     <div
       ref={containerRef}
@@ -430,11 +460,67 @@ export default function GridCanvas() {
                 strokeWidth={((bad ? 3 : 2) + (hoverSeg === seg.index ? 1 : 0)) / view.scale}
                 hitStrokeWidth={closed ? 12 / view.scale : 0}
                 onClick={onSegmentClick(seg.index)}
+                onContextMenu={onSegmentContextMenu(seg.index)}
                 onMouseEnter={() => closed && setHoverSeg(seg.index)}
                 onMouseLeave={() => setHoverSeg(null)}
               />
             );
           })}
+
+          {/* marker START: linea a scacchi + freccia del verso + etichetta */}
+          {startSeg && (
+            <Group listening={false}>
+              <Line
+                points={[startSeg.a.x, startSeg.a.y, startSeg.b.x, startSeg.b.y]}
+                stroke="#ffffff"
+                strokeWidth={6 / view.scale}
+              />
+              <Line
+                points={[startSeg.a.x, startSeg.a.y, startSeg.b.x, startSeg.b.y]}
+                stroke="#111111"
+                strokeWidth={6 / view.scale}
+                dash={[5 / view.scale, 5 / view.scale]}
+              />
+              {travelDir && (
+                <Arrow
+                  points={[
+                    (startSeg.a.x + startSeg.b.x) / 2 - travelDir.x * (18 / view.scale),
+                    (startSeg.a.y + startSeg.b.y) / 2 - travelDir.y * (18 / view.scale),
+                    (startSeg.a.x + startSeg.b.x) / 2 + travelDir.x * (26 / view.scale),
+                    (startSeg.a.y + startSeg.b.y) / 2 + travelDir.y * (26 / view.scale),
+                  ]}
+                  stroke={COLORS.label}
+                  fill={COLORS.label}
+                  strokeWidth={3 / view.scale}
+                  pointerLength={10 / view.scale}
+                  pointerWidth={8 / view.scale}
+                />
+              )}
+              {(() => {
+                const mid = {
+                  x: (startSeg.a.x + startSeg.b.x) / 2,
+                  y: (startSeg.a.y + startSeg.b.y) / 2,
+                };
+                const dx = startSeg.b.x - startSeg.a.x;
+                const dy = startSeg.b.y - startSeg.a.y;
+                const len = startSeg.length || 1;
+                const off = 22 / view.scale;
+                return (
+                  <Text
+                    x={mid.x - (-dy / len) * off}
+                    y={mid.y - (dx / len) * off}
+                    text="START"
+                    fontSize={12 / view.scale}
+                    fontStyle="bold"
+                    fill="#ffffff"
+                    scaleY={-1}
+                    offsetX={(5 * 12 * 0.3) / view.scale}
+                    offsetY={6 / view.scale}
+                  />
+                );
+              })()}
+            </Group>
+          )}
 
           {/* etichette lunghezza segmenti (ri-flippate per il y-up dello stage) */}
           {segments.map((seg) => {
@@ -602,20 +688,38 @@ export default function GridCanvas() {
           onMouseDown={(e) => e.stopPropagation()}
           onContextMenu={(e) => e.preventDefault()}
         >
-          <button
-            disabled={!canDeletePoint}
-            title={
-              canDeletePoint
-                ? `Elimina il punto ${ctxMenu.pointIndex + 1}`
-                : 'Un poligono chiuso richiede almeno 3 punti'
-            }
-            onClick={() => {
-              removePoint(ctxMenu.pointIndex);
-              setCtxMenu(null);
-            }}
-          >
-            🗑 Elimina punto
-          </button>
+          {ctxMenu.kind === 'vertex' && (
+            <button
+              disabled={!canDeletePoint}
+              title={
+                canDeletePoint
+                  ? `Elimina il punto ${ctxMenu.index + 1}`
+                  : 'Un poligono chiuso richiede almeno 3 punti'
+              }
+              onClick={() => {
+                removePoint(ctxMenu.index);
+                setCtxMenu(null);
+              }}
+            >
+              🗑 Elimina punto
+            </button>
+          )}
+          {ctxMenu.kind === 'segment' && (
+            <button
+              disabled={polygon.startSegment === ctxMenu.index}
+              title={
+                polygon.startSegment === ctxMenu.index
+                  ? 'Questo segmento è già lo start'
+                  : `Rettilineo di partenza sul segmento ${ctxMenu.index + 1}`
+              }
+              onClick={() => {
+                setStartSegment(ctxMenu.index);
+                setCtxMenu(null);
+              }}
+            >
+              🏁 Imposta come start
+            </button>
+          )}
         </div>
       )}
     </div>

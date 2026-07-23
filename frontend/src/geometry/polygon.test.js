@@ -12,6 +12,7 @@ import {
   ringSelfIntersections,
   pointSegmentDistance,
   violatesClearance,
+  signedArea,
 } from './polygon.js';
 
 const P = (x, y) => ({ x, y });
@@ -122,6 +123,18 @@ describe('segmentLengths / totalLength', () => {
   });
   it('meno di 3 punti: nessun segmento di chiusura', () => {
     expect(segmentLengths([P(0, 0), P(1, 0)], true).length).toBe(1);
+  });
+});
+
+describe('signedArea', () => {
+  it('quadrato in ordine antiorario (y-up): area positiva', () => {
+    expect(signedArea([P(0, 0), P(4, 0), P(4, 4), P(0, 4)])).toBe(16);
+  });
+  it('stesso quadrato in ordine orario: area negativa', () => {
+    expect(signedArea([P(0, 0), P(0, 4), P(4, 4), P(4, 0)])).toBe(-16);
+  });
+  it('triangolo: metà base per altezza', () => {
+    expect(Math.abs(signedArea([P(0, 0), P(4, 0), P(0, 3)]))).toBe(6);
   });
 });
 

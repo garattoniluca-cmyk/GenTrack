@@ -44,6 +44,11 @@ Editor poligonale 2D funzionante su http://localhost:5173 (`npm run dev` in
       **tasto destro riservato all'app** (menu browser soppresso): destro su
       vertice apre **menu contestuale** con voce "Elimina punto"
       (disabilitata se poligono chiuso a 3 punti; chiusura con Esc/click/wheel).
+- [x] 2026-07-23 — **Start su segmento + verso di percorrenza** (D-015):
+      menu contestuale sui segmenti ("Imposta come start"), toggle
+      orario/antiorario in toolbar (default = winding del disegno), marker a
+      scacchi + freccia del verso, campi `startSegment`/`direction` nello
+      schema condiviso, rimappatura indici su insert/remove. 38 test verdi.
 - [ ] Fase 1: **validazione visiva/interattiva dell'utente** in corso.
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —

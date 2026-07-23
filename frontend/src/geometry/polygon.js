@@ -152,6 +152,20 @@ export function totalLength(points, closed = false) {
   return segmentLengths(points, closed).reduce((sum, s) => sum + s.length, 0);
 }
 
+/**
+ * Area con segno del poligono (shoelace). Con y-up: positiva = antiorario
+ * (ccw), negativa = orario (cw). Usata per il verso di percorrenza.
+ */
+export function signedArea(points) {
+  let s = 0;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i];
+    const b = points[(i + 1) % points.length];
+    s += a.x * b.y - b.x * a.y;
+  }
+  return s / 2;
+}
+
 /** Distanza minima tra il punto p e il segmento [a,b]. */
 export function pointSegmentDistance(p, a, b) {
   const dx = b.x - a.x;

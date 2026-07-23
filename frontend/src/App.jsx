@@ -14,6 +14,7 @@ export default function App() {
   const setGridSize = useTrackStore((s) => s.setGridSize);
   const minClearance = useTrackStore((s) => s.minClearance);
   const setMinClearance = useTrackStore((s) => s.setMinClearance);
+  const setDirection = useTrackStore((s) => s.setDirection);
   const undo = useTrackStore((s) => s.undo);
   const redo = useTrackStore((s) => s.redo);
   const historyPast = useTrackStore((s) => s.historyPast);
@@ -79,6 +80,23 @@ export default function App() {
           />
         </label>
 
+        {polygon.closed && (
+          <div className="direction-toggle" title="Verso di percorrenza">
+            <button
+              className={polygon.direction === 'cw' ? 'active' : ''}
+              onClick={() => setDirection('cw')}
+            >
+              ⟳ Orario
+            </button>
+            <button
+              className={polygon.direction === 'ccw' ? 'active' : ''}
+              onClick={() => setDirection('ccw')}
+            >
+              ⟲ Antiorario
+            </button>
+          </div>
+        )}
+
         <button onClick={undo} disabled={historyPast === 0} title="Annulla">
           ↩ Undo
         </button>
@@ -115,6 +133,7 @@ export default function App() {
               <li><b>Drag su un vertice</b> — sposta punto</li>
               <li><b>Tasto destro su un vertice</b> — menu (Elimina punto)</li>
               <li><b>Click su un segmento</b> (chiuso) — inserisci punto</li>
+              <li><b>Tasto destro su un segmento</b> (chiuso) — imposta start</li>
               <li><b>Esc</b> — rimuovi ultimo punto</li>
               <li><b>Rotellina</b> — zoom</li>
               <li><b>Space + drag</b> / rotellina premuta — pan</li>
@@ -137,6 +156,17 @@ export default function App() {
         {conflicts.length > 0 && (
           <span className="err">⚠ {conflicts.length} intersezioni</span>
         )}
+        {polygon.closed &&
+          (polygon.startSegment != null ? (
+            <span className="ok">
+              🏁 start: segmento {polygon.startSegment + 1} ·{' '}
+              {polygon.direction === 'cw' ? 'orario ⟳' : 'antiorario ⟲'}
+            </span>
+          ) : (
+            <span className="warn">
+              🏁 imposta lo start — tasto destro su un segmento
+            </span>
+          ))}
         <span className={polygon.closed ? 'ok' : 'dim'}>
           {polygon.closed ? '● circuito chiuso' : '○ in disegno'}
         </span>
