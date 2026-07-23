@@ -161,12 +161,15 @@ http://localhost:5173. **112 test unitari verdi**.
         validazione curve più strette del tubo (warning, non correzione)
       - Verificato con screenshot: tubo corretto, 13.776 triangoli @984
         anelli, zero errori console
-- [x] 2026-07-23 — **Fix perno del bank** (bug segnalato dall'utente: pista
-      piatta deformata nei transitori con dislivelli): il roll ruotava
-      attorno alla MEZZERIA → lato interno sotto quota (−6.8 m @20° su 28 m).
-      Ora perno sul BORDO BASSO (D-026 rev.2): bordo basso inchiodato a
-      z(s), solo l'esterno si alza (come le sopraelevate reali); lift C1
-      (roll=0 solo dove roll'=0). +3 test (tot **115 verdi**).
+- [x] 2026-07-23 — **Perno del bank, 3 iterazioni su feedback utente**:
+      (1) mezzeria → lato interno sotto quota (−6.8 m @20°): deformazioni;
+      (2) bordo basso del TUBO intero (braccio 14 m) → carreggiata sollevata
+      di ~5 m nei transitori ("le macchine salterebbero");
+      (3) FINALE (D-026 rev.3, geometria da ovale reale): carreggiata ruota
+      sul SUO bordo basso (centro +2 m @20°), erba lato basso PIATTA a quota
+      terreno (apron), erba lato alto nel piano bankato, scambio lati solo a
+      roll=0 dove i rami coincidono. +2 test (tot **117 verdi**).
+      Verificato con screenshot: curva bankata ancorata a terra, zero gobbe.
 - [ ] Fase 3B: **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).

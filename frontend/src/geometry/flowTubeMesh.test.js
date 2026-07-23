@@ -108,15 +108,38 @@ describe('buildFlowTubeMesh — banking e quota', () => {
     }
   });
 
-  it('il bordo BASSO resta esattamente a quota nominale (perno)', () => {
-    const roll10 = new Array(N).fill(10); // sinistra alzata → bordo basso = erba DX
+  it('il bordo basso della CARREGGIATA resta esattamente a quota nominale', () => {
+    const roll10 = new Array(N).fill(10); // sinistra alzata → lato basso = destra
+    const m = buildFlowTubeMesh(path.samples, zFlat, roll10, SECTION);
+    const lines = m.bands.lines;
+    const half = lines.positions.length / 2; // secondo blocco = riga DX
+    for (let i = 0; i < N; i += 50) {
+      const rightLineOuterY = lines.positions[half + i * 6 + 4]; // rail −w
+      expect(Math.abs(rightLineOuterY)).toBeLessThan(1e-9);
+    }
+  });
+
+  it('APRON: l\'erba sul lato basso è PIATTA a quota terreno (come gli ovali reali)', () => {
+    const roll10 = new Array(N).fill(10); // lato basso = destra
     const m = buildFlowTubeMesh(path.samples, zFlat, roll10, SECTION);
     const g = m.bands.grass;
-    const half = g.positions.length / 2;
-    for (let i = 0; i < N; i += 50) {
-      const rightOuterY = g.positions[half + i * 6 + 4]; // erba DX, rail esterno
-      expect(Math.abs(rightOuterY)).toBeLessThan(1e-9); // inchiodato a z=0
+    const half = g.positions.length / 2; // secondo blocco = erba DX
+    for (let k = half + 1; k < g.positions.length; k += 3) {
+      expect(Math.abs(g.positions[k])).toBeLessThan(1e-9); // tutta a z=0
     }
+  });
+
+  it('GOBBA LIMITATA: la carreggiata sale al massimo di 2w·sin(roll), non di più', () => {
+    const roll20 = new Array(N).fill(20);
+    const m = buildFlowTubeMesh(path.samples, zFlat, roll20, SECTION);
+    const maxRise = 12 * Math.sin((20 * Math.PI) / 180) + 1e-6; // 2w·sin20 ≈ 4.10 m
+    const a = m.bands.asphalt;
+    for (let k = 1; k < a.positions.length; k += 3) {
+      expect(a.positions[k]).toBeLessThanOrEqual(maxRise);
+      expect(a.positions[k]).toBeGreaterThanOrEqual(-1e-9);
+    }
+    // col vecchio perno sul bordo del TUBO il bordo alto arrivava a
+    // 2·(w+grass)·sin20 ≈ 9.6 m: qui deve restare sotto 4.2
   });
 
   it('CONTINUITÀ del lift lungo le rampe: nessun salto verticale', () => {

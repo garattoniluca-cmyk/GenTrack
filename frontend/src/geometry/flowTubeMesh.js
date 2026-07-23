@@ -135,6 +135,8 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
   const rWallRTop = new Array(n);
   const upN = new Array(n); // normale carreggiata per anello
   const leftN = new Array(n); // laterale (per le normali dei muri)
+  const grassLN = new Array(n); // normale erba SX (piano bankato o apron piatto)
+  const grassRN = new Array(n); // normale erba DX
 
   const UP = [0, 1, 0];
   for (let i = 0; i < n; i++) {
@@ -154,27 +156,54 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
     upN[i] = U;
     leftN[i] = L;
 
-    // PERNO SUL BORDO BASSO (D-026 rev.2): il roll non ruota attorno alla
-    // mezzeria (che affonderebbe il lato interno sotto quota) ma attorno al
-    // bordo esterno del lato che scende: quel bordo resta ESATTAMENTE alla
-    // quota nominale z[i], tutto il resto si alza. Come le sopraelevate
-    // reali. lift è C1 lungo s: |sin(roll)| ha kink solo dove roll tocca 0,
-    // cioè agli estremi delle rampe smoothstep dove roll' = 0.
-    const edgeDropL = dGrassL * L[1]; // Δy del bordo erba SX
-    const edgeDropR = dGrassR * L[1]; // Δy del bordo erba DX
-    const lift = Math.max(0, -Math.min(edgeDropL, edgeDropR));
+    // GEOMETRIA DA OVALE REALE (D-026 rev.3):
+    // - la CARREGGIATA (righe+asfalto) ruota attorno al SUO bordo basso
+    //   (±w): quel bordo resta esattamente a quota z[i]; il centro sale di
+    //   soli w·|sin(roll)| (2 m a 20° su 12 m), spalmati sulla rampa —
+    //   niente gobbe da salto
+    // - l'ERBA sul lato BASSO resta ORIZZONTALE a quota z[i] (l'apron
+    //   piatto degli ovali): è la pista che si inclina, non il mondo che
+    //   si solleva
+    // - l'ERBA sul lato ALTO continua il piano bankato della carreggiata
+    // - lift C1 lungo s: |sin(roll)| ha kink solo dove roll tocca 0, cioè
+    //   agli estremi delle rampe smoothstep dove roll' = 0
+    const s1 = L[1]; // componente verticale del laterale bankato (~sin roll)
+    const roadLift = w * Math.abs(s1); // bordo basso carreggiata → quota z[i]
 
-    const at = (d) => [
+    const roadAt = (d) => [
       P[i][0] + L[0] * d,
-      P[i][1] + L[1] * d + lift,
+      P[i][1] + L[1] * d + roadLift,
       P[i][2] + L[2] * d,
     ];
-    rGrassLOut[i] = at(dGrassL);
-    rLineLOut[i] = at(w);
-    rLineLIn[i] = at(w - lw);
-    rLineRIn[i] = at(-(w - lw));
-    rLineROut[i] = at(-w);
-    rGrassROut[i] = at(dGrassR);
+    // erba orizzontale: parte dal bordo carreggiata e prosegue in piano
+    const flatFrom = (edge, dir, width) => [
+      edge[0] + Lh[0] * dir * width,
+      edge[1], // quota costante
+      edge[2] + Lh[2] * dir * width,
+    ];
+
+    rLineLOut[i] = roadAt(w);
+    rLineLIn[i] = roadAt(w - lw);
+    rLineRIn[i] = roadAt(-(w - lw));
+    rLineROut[i] = roadAt(-w);
+
+    if (s1 > 0) {
+      // sinistra alzata: erba SX nel piano bankato, erba DX piatta (apron)
+      rGrassLOut[i] = roadAt(dGrassL);
+      rGrassROut[i] = flatFrom(rLineROut[i], -1, section.grassRight);
+      grassLN[i] = U;
+      grassRN[i] = U0;
+    } else if (s1 < 0) {
+      rGrassLOut[i] = flatFrom(rLineLOut[i], +1, section.grassLeft);
+      rGrassROut[i] = roadAt(dGrassR);
+      grassLN[i] = U0;
+      grassRN[i] = U;
+    } else {
+      rGrassLOut[i] = roadAt(dGrassL);
+      rGrassROut[i] = roadAt(dGrassR);
+      grassLN[i] = U;
+      grassRN[i] = U;
+    }
     // muri VERTICALI (gravità), dalla superficie dell'erba in su
     rWallLTop[i] = [rGrassLOut[i][0], rGrassLOut[i][1] + wallHeight, rGrassLOut[i][2]];
     rWallRTop[i] = [rGrassROut[i][0], rGrassROut[i][1] + wallHeight, rGrassROut[i][2]];
@@ -189,8 +218,8 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
       buildRibbon(rLineRIn, rLineROut, upN, totalLen(samples)),
     ]),
     grass: mergeIndexed([
-      buildRibbon(rGrassLOut, rLineLOut, upN, totalLen(samples)),
-      buildRibbon(rLineROut, rGrassROut, upN, totalLen(samples)),
+      buildRibbon(rGrassLOut, rLineLOut, grassLN, totalLen(samples)),
+      buildRibbon(rLineROut, rGrassROut, grassRN, totalLen(samples)),
     ]),
     walls: mergeIndexed([
       // muro SX: faccia interna verso destra (−L) → winding flip

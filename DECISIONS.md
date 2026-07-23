@@ -342,15 +342,23 @@ pendenza max 0.29% (spigolo vero ~10%).
 - **Validazione (non correzione)**: curva con R minimo < semi-larghezza
   tubo → warning rosso (bordo interno auto-intersecante), si allargano i
   bracci in Fase 2.
-- **Rev. 2 (2026-07-23, bug segnalato dall'utente)**: il roll NON ruota
-  attorno alla mezzeria — su pista piatta affondava il lato interno sotto
-  quota (−6.8 m a 20° su tubo da 28 m) deformando i transitori con
-  dislivelli. Ora **perno sul bordo BASSO**: il bordo del lato che scende
-  resta ESATTAMENTE alla quota nominale z(s), tutto il resto si alza —
-  come le sopraelevate reali. Il lift (=|Δy bordo|) è C1 lungo s perché
-  roll tocca 0 solo agli estremi delle rampe smoothstep, dove roll'=0.
-  Test: mai sotto quota nominale, bordo basso inchiodato, continuità
-  verticale sulle rampe.
+- **Rev. 2 (2026-07-23)**: perno sul bordo basso del TUBO intero —
+  SUPERATA da rev. 3 lo stesso giorno: col braccio da 14 m (erba compresa)
+  la carreggiata si sollevava di ~5 m nei transitori ("le macchine
+  salterebbero" — utente).
+- **Rev. 3 (2026-07-23) — geometria da ovale reale**:
+  · la CARREGGIATA (righe+asfalto) ruota attorno al SUO bordo basso (±w):
+    quel bordo resta a quota z(s), il centro sale di soli w·sin(roll)
+    (2 m a 20° su 12 m), spalmati sulla rampa — niente gobbe;
+  · l'ERBA sul lato BASSO resta ORIZZONTALE a quota z(s) (l'apron piatto
+    degli ovali): è la pista che si inclina, non il mondo che si solleva;
+  · l'ERBA sul lato ALTO continua il piano bankato; muri verticali dai
+    bordi erba;
+  · lati che si scambiano SOLO attraverso roll=0, dove i due rami
+    coincidono (continuità garantita); lift C1 (roll=0 ⇒ roll'=0 sulle
+    rampe smoothstep).
+  Test: mai sotto quota, bordo basso carreggiata inchiodato, apron piatto
+  al bit, gobba ≤ 2w·sin(roll), continuità verticale sulle rampe.
 
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
