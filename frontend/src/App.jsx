@@ -101,6 +101,17 @@ export default function App() {
       ),
     [resampled.sampleCount, resampled.totalLength, resampled.corners, flowTube.cornerBanking]
   );
+  // estensione del rettilineo di start nel dominio s: dal termine dell'ultima
+  // stondatura (prima del traguardo) all'inizio della prima (dopo il traguardo).
+  // Nel grafico (tagliato in s=0) appare come due bande agli estremi.
+  const startStraight = useMemo(() => {
+    const cs = resampled.corners.filter((c) => !c.skip && c.sStart != null);
+    if (cs.length === 0) return null;
+    const first = cs.reduce((a, b) => (a.sStart < b.sStart ? a : b));
+    const last = cs.reduce((a, b) => (a.sEnd > b.sEnd ? a : b));
+    return { endS: first.sStart, beginS: last.sEnd };
+  }, [resampled.corners]);
+
   const bankConflicts = useMemo(
     () =>
       bankingConflicts(resampled.totalLength, resampled.corners, flowTube.cornerBanking),
@@ -304,6 +315,7 @@ export default function App() {
                 elevation={elevation}
                 totalLength={resampled.totalLength}
                 maxSlopePct={flowTube.elevationNoise.maxSlopePct}
+                startStraight={startStraight}
               />
             </div>
           </div>

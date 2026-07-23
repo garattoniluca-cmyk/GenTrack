@@ -6,7 +6,7 @@ import { useRef, useState, useEffect, useMemo } from 'react';
 
 const PAD = { l: 38, r: 10, t: 8, b: 18 };
 
-export default function ElevationProfile({ elevation, totalLength, maxSlopePct }) {
+export default function ElevationProfile({ elevation, totalLength, maxSlopePct, startStraight }) {
   const svgRef = useRef(null);
   const [box, setBox] = useState({ w: 600, h: 150 });
 
@@ -68,6 +68,46 @@ export default function ElevationProfile({ elevation, totalLength, maxSlopePct }
       <svg ref={svgRef} className="chart-svg" width="100%" height={h}>
         {data && (
           <>
+            {/* rettilineo di START: il grafico è tagliato in s=0 (metà del
+                rettilineo), quindi appare come due bande agli estremi */}
+            {startStraight && (
+              <>
+                <rect
+                  x={PAD.l}
+                  y={PAD.t}
+                  width={Math.max(0, startStraight.endS * plotW)}
+                  height={plotH}
+                  fill="rgba(126, 231, 135, 0.08)"
+                />
+                <rect
+                  x={PAD.l + startStraight.beginS * plotW}
+                  y={PAD.t}
+                  width={Math.max(0, (1 - startStraight.beginS) * plotW)}
+                  height={plotH}
+                  fill="rgba(126, 231, 135, 0.08)"
+                />
+                <line
+                  x1={PAD.l + startStraight.endS * plotW}
+                  x2={PAD.l + startStraight.endS * plotW}
+                  y1={PAD.t}
+                  y2={PAD.t + plotH}
+                  stroke="#2ea043"
+                  strokeDasharray="4,3"
+                />
+                <line
+                  x1={PAD.l + startStraight.beginS * plotW}
+                  x2={PAD.l + startStraight.beginS * plotW}
+                  y1={PAD.t}
+                  y2={PAD.t + plotH}
+                  stroke="#2ea043"
+                  strokeDasharray="4,3"
+                />
+                <text x={PAD.l + 4} y={PAD.t + 10} className="chart-tick" fill="#7ee787">
+                  🏁 rettilineo start
+                </text>
+              </>
+            )}
+
             {/* quota 0 */}
             <line
               x1={PAD.l}
