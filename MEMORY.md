@@ -127,6 +127,14 @@ altimetria) su http://localhost:5173. **84 test unitari verdi**.
       Verificato live: eccesso 73 m calcolato esatto. 100 test verdi.
       LEZIONE: l'utente vuole controllo esplicito, mai correzioni automatiche
       dei suoi input — validare e segnalare, non aggiustare.
+- [x] 2026-07-23 — **Fix spianamento start** (bug segnalato dall'utente con
+      screenshot): la finestra era FISSA (6% del giro attorno a s=0) mentre il
+      rettilineo reale può essere molto più lungo (nel tracciato di test:
+      33% del giro!) → rumore e "spigoli" dentro il rettilineo. Ora lo
+      spianamento usa l'estensione REALE del rettilineo (da startStraight,
+      stessa fonte delle bande verdi del grafico) + rampe smoothstep di 250 m
+      oltre i confini. Con flatten=1: z=0 esatto su TUTTO il rettilineo,
+      salto pendenza max 0.93% (spigolo vero ~10%). 102 test verdi.
 - [ ] Fase 3A: **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).

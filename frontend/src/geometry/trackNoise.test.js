@@ -110,6 +110,31 @@ describe('buildElevation', () => {
     }
   });
 
+  it('spianamento=1 con rettilineo REALE: piatto su TUTTO il rettilineo, senza spigoli', () => {
+    const ds = LEN / N;
+    // rettilineo che wrappa attorno a s=0: da 0.85 a 0.10 (25% del giro)
+    const straight = { beginS: 0.85, endS: 0.1 };
+    for (const seed of [1, 42, 12345]) {
+      const { z } = buildElevation(
+        N,
+        LEN,
+        { seed, amplitude: 150, wavelength: 2500, octaves: 1, maxSlopePct: 10, flattenStart: 1 },
+        straight
+      );
+      const slope = (i) => (z[(i + 1) % N] - z[i]) / ds;
+      for (let i = 0; i < N; i++) {
+        const s = i / N;
+        // dentro il rettilineo: PIATTO esatto
+        if (s >= straight.beginS || s <= straight.endS) {
+          expect(Math.abs(z[i])).toBeLessThan(1e-9);
+        }
+        // ovunque: continuo e derivabile (niente spike/spigoli ai confini)
+        expect(Math.abs(z[(i + 1) % N] - z[i])).toBeLessThanOrEqual(0.1 * ds + 1e-9);
+        expect(Math.abs(slope((i + 1) % N) - slope(i))).toBeLessThan(0.012);
+      }
+    }
+  });
+
   it('input non validi → vuoto', () => {
     expect(buildElevation(1, LEN).z).toEqual([]);
     expect(buildElevation(N, 0).z).toEqual([]);
