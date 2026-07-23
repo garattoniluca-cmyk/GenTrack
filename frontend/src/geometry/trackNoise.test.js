@@ -84,6 +84,32 @@ describe('buildElevation', () => {
     expect(res.stats.gain).toBeGreaterThan(0);
   });
 
+  it('flattenStart=1: profilo CONTINUO e DERIVABILE, niente spike né spigoli', () => {
+    const ds = LEN / N;
+    for (const seed of [1, 7, 42, 12345, 999983]) {
+      const { z } = buildElevation(N, LEN, {
+        seed,
+        amplitude: 50,
+        wavelength: 2500,
+        octaves: 2,
+        maxSlopePct: 10,
+        flattenStart: 1,
+      });
+      const slope = (i) => (z[(i + 1) % N] - z[i]) / ds;
+      for (let i = 0; i < N; i++) {
+        // continuità: salto tra sample ≤ pendenza massima consentita
+        expect(Math.abs(z[(i + 1) % N] - z[i])).toBeLessThanOrEqual(0.1 * ds + 1e-9);
+        // derivabilità discreta: la PENDENZA non salta (uno spigolo vero
+        // avrebbe Δslope ~ 10%; misurato smooth ≈ 0.24% — soglia 1%)
+        expect(Math.abs(slope((i + 1) % N) - slope(i))).toBeLessThan(0.01);
+      }
+      // dentro la finestra di spianamento pieno z = 0 esatto, senza gradino
+      expect(Math.abs(z[0])).toBeLessThan(1e-9);
+      expect(Math.abs(z[1])).toBeLessThan(1e-9);
+      expect(Math.abs(z[N - 1])).toBeLessThan(1e-9);
+    }
+  });
+
   it('input non validi → vuoto', () => {
     expect(buildElevation(1, LEN).z).toEqual([]);
     expect(buildElevation(N, 0).z).toEqual([]);
