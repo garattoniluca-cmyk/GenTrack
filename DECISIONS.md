@@ -1,0 +1,91 @@
+# DECISIONS.md — Registro decisioni tecniche
+
+> Ogni decisione: ID, data, decisione, motivazione, alternative scartate.
+> Le D-001…D-008 derivano dal brief (vincoli fondativi, §8 e sparsi).
+> Ultimo aggiornamento: 2026-07-23
+
+## Vincoli fondativi (dal brief — NON rinegoziabili senza il proprietario del progetto)
+
+### D-001 — Terreno ancorato al bordo, mai stitching
+**Data**: 2026-07-23 (dal brief)
+**Decisione**: il rumore del terreno nasce in coordinate (s, d) ancorate al
+bordo esterno effettivo del tubo di flusso; l'ampiezza è pesata da
+smoothstep sul falloff. Mai generare terreno in coordinate mondo e cucirlo.
+**Motivazione**: lo stitching a posteriori è la fonte primaria dei problemi
+già riscontrati in passato dal proprietario del progetto con questo approccio.
+**Scartato**: heightmap globale + blending sui bordi.
+
+### D-002 — Banking sempre input utente esplicito
+**Data**: 2026-07-23 (dal brief)
+**Decisione**: `bankingChannel` è definito dall'utente per keyframe; mai
+derivato da curvatura o altre proprietà geometriche.
+**Motivazione**: controllo creativo esplicito; evitare accoppiamenti impliciti
+tra fasi.
+
+### D-003 — Parallel transport frame, non Frenet-Serret
+**Data**: 2026-07-23 (dal brief)
+**Decisione**: frame lungo la spline via parallel transport (rotazione
+incrementale attorno a t_prev × t_curr).
+**Motivazione**: Frenet-Serret flippa nei punti di flesso/rettilineo →
+twist della mesh.
+
+### D-004 — Mesh esplicite, no marching cubes/voxel
+**Data**: 2026-07-23 (dal brief)
+**Decisione**: pista = estrusione di sezioni (strip triangolare); terreno =
+griglia regolare con altezza per vertice.
+**Motivazione**: più precise e meno costose; voxel non necessari.
+
+### D-005 — No database in questa fase
+**Data**: 2026-07-23 (dal brief)
+**Decisione**: persistenza su file JSON locali (`./data/tracks/{id}.json`)
+dietro `file_store.py` con interfaccia repository (save/load/list_all/delete).
+**Motivazione**: schema non ancora stabile; l'interfaccia permette lo swap
+1:1 con un DB in futuro senza toccare gli schemi.
+
+### D-006 — Parametrizzazione universale su arc-length normalizzato
+**Data**: 2026-07-23 (dal brief)
+**Decisione**: tutti i canali (width, banking, elevation, sectionProfiles,
+runoff, falloff) usano `s ∈ [0,1]` sull'arc-length totale; mai indici di
+control point.
+**Motivazione**: interpolazione indipendente dalla densità di campionamento.
+**Corollario**: lo splice di una chicane (fase 4) cambia la lunghezza totale
+→ rimappatura esplicita degli `s > s2` di tutti i keyframe.
+
+### D-007 — Pipeline geometrica interamente client-side
+**Data**: 2026-07-23 (dal brief)
+**Decisione**: tutta la geometria gira nel browser; backend solo per
+persistenza, AI assist, export pesante opzionale.
+**Motivazione**: iterazione rapida, backend non bloccante per l'MVP.
+
+### D-008 — Euristica velocità dichiarata come stima, non simulazione
+**Data**: 2026-07-23 (dal brief)
+**Decisione**: `v_max = sqrt(a_lat_max/κ)` con `a_lat_max` configurabile
+(default 15–20 m/s²), clampata a v_max rettilineo. La UI deve dichiararla
+come stima approssimativa.
+**Motivazione**: serve solo per dimensionare vie di fuga e chicane, non per
+simulazione fisica accurata.
+
+## Decisioni operative (prese durante lo sviluppo)
+
+### D-009 — Sistema di file di memoria
+**Data**: 2026-07-23
+**Decisione**: documentazione di lavoro in 10 file markdown in root
+(CLAUDE.md + 9 file di memoria), aggiornati a ogni sessione. Doc in
+italiano, codice in inglese.
+**Motivazione**: continuità tra sessioni Claude Code.
+
+<!-- Template nuova decisione:
+### D-0XX — Titolo
+**Data**: YYYY-MM-DD
+**Decisione**: ...
+**Motivazione**: ...
+**Scartato**: ...
+-->
+
+## Decisioni pendenti
+
+- **P-001**: Konva.js vs canvas nativo per l'editor 2D (decidere allo sprint 2).
+- **P-002**: larghezza simmetrica singola vs `widthLeft`/`widthRight` fin
+  dall'inizio (il brief cita l'asimmetria come opzione).
+- **P-003**: tensione per punto nella Catmull-Rom: variante custom o parametro
+  ignorato nell'MVP.

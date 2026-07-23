@@ -1,0 +1,22 @@
+# Node / frontend
+node_modules/
+dist/
+*.local
+
+# Python / backend
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Dati locali (persistenza JSON progetti)
+backend/data/
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Log
+*.log
