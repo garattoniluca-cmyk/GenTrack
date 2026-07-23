@@ -1,0 +1,266 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "trackgen/track_schema.json",
+  "title": "TrackGen Track",
+  "description": "Schema condiviso frontend/backend — single source of truth (TRACKGEN_BRIEF.md §3). Tutti i canali sono parametrizzati su s = arc-length normalizzato [0,1].",
+  "type": "object",
+  "required": ["id", "name", "stage1_polygon", "metadata"],
+  "properties": {
+    "id": { "type": "string" },
+    "name": { "type": "string" },
+
+    "stage1_polygon": {
+      "type": "object",
+      "required": ["points", "gridSize", "closed"],
+      "properties": {
+        "points": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/point2" }
+        },
+        "gridSize": { "type": "number", "exclusiveMinimum": 0 },
+        "closed": { "type": "boolean" }
+      }
+    },
+
+    "stage2_spline": {
+      "type": "object",
+      "properties": {
+        "controlPoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "x", "y"],
+            "properties": {
+              "id": { "type": "string" },
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "tension": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        },
+        "resampledArcLength": {
+          "type": "object",
+          "properties": {
+            "totalLength": { "type": "number", "minimum": 0 },
+            "sampleCount": { "type": "integer", "minimum": 0 },
+            "samples": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["t", "s", "x", "y"],
+                "properties": {
+                  "t": { "type": "number" },
+                  "s": { "$ref": "#/definitions/sNorm" },
+                  "x": { "type": "number" },
+                  "y": { "type": "number" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "stage3_flowTube": {
+      "type": "object",
+      "properties": {
+        "widthChannel": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["s", "value"],
+            "properties": {
+              "s": { "$ref": "#/definitions/sNorm" },
+              "value": { "type": "number", "exclusiveMinimum": 0 },
+              "transition": { "$ref": "#/definitions/transition" }
+            }
+          }
+        },
+        "bankingChannel": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["s", "angleDeg"],
+            "properties": {
+              "s": { "$ref": "#/definitions/sNorm" },
+              "angleDeg": { "type": "number" },
+              "transition": { "$ref": "#/definitions/transition" }
+            }
+          }
+        },
+        "elevationChannel": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["s", "height"],
+            "properties": {
+              "s": { "$ref": "#/definitions/sNorm" },
+              "height": { "type": "number" },
+              "transition": { "$ref": "#/definitions/transition" }
+            }
+          }
+        },
+        "sectionProfiles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["s", "profileType"],
+            "properties": {
+              "s": { "$ref": "#/definitions/sNorm" },
+              "profileType": { "enum": ["wall_edge", "secondary_surface"] },
+              "wallHeight": { "type": "number", "minimum": 0 },
+              "secondarySurface": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "object",
+                    "required": ["material", "width"],
+                    "properties": {
+                      "material": { "enum": ["grass", "sand", "gravel"] },
+                      "width": { "type": "number", "exclusiveMinimum": 0 }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "marshalGates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["s", "width", "side"],
+            "properties": {
+              "s": { "$ref": "#/definitions/sNorm" },
+              "width": { "type": "number", "exclusiveMinimum": 0 },
+              "side": { "$ref": "#/definitions/side" }
+            }
+          }
+        }
+      }
+    },
+
+    "stage4_artificialElements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type", "insertAt", "params"],
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "enum": ["chicane"] },
+          "insertAt": {
+            "type": "object",
+            "required": ["sStart", "sEnd"],
+            "properties": {
+              "sStart": { "$ref": "#/definitions/sNorm" },
+              "sEnd": { "$ref": "#/definitions/sNorm" }
+            }
+          },
+          "params": {
+            "type": "object",
+            "properties": {
+              "entrySpeedKph": { "type": "number", "exclusiveMinimum": 0 },
+              "lateralOffset": { "type": "number" },
+              "severity": { "type": "number", "minimum": 0, "maximum": 1 }
+            }
+          }
+        }
+      }
+    },
+
+    "stage5_runoffAreas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "sRange", "side"],
+        "properties": {
+          "id": { "type": "string" },
+          "sRange": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/sNorm" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "side": { "$ref": "#/definitions/side" },
+          "generatedEnvelope": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["s", "d"],
+              "properties": {
+                "s": { "$ref": "#/definitions/sNorm" },
+                "d": { "type": "number" }
+              }
+            }
+          },
+          "manualOverride": {
+            "type": "array",
+            "items": { "$ref": "#/definitions/point2" }
+          },
+          "surfaceType": { "enum": ["grass", "sand", "gravel", "asphalt"] }
+        }
+      }
+    },
+
+    "stage6_terrain": {
+      "type": "object",
+      "properties": {
+        "falloffDistance": { "type": "number", "exclusiveMinimum": 0 },
+        "falloffDistanceCurve": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["s", "value"],
+            "properties": {
+              "s": { "$ref": "#/definitions/sNorm" },
+              "value": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          }
+        },
+        "noiseParams": {
+          "type": "object",
+          "properties": {
+            "baseFrequencyS": { "type": "number", "exclusiveMinimum": 0 },
+            "baseFrequencyD": { "type": "number", "exclusiveMinimum": 0 },
+            "octaves": { "type": "integer", "minimum": 1, "maximum": 10 },
+            "persistence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
+            "lacunarity": { "type": "number", "exclusiveMinimum": 1 },
+            "seed": { "type": "integer" }
+          }
+        }
+      }
+    },
+
+    "metadata": {
+      "type": "object",
+      "required": ["createdAt", "updatedAt", "version"],
+      "properties": {
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "version": { "type": "string" }
+      }
+    }
+  },
+
+  "definitions": {
+    "point2": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "sNorm": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1,
+      "description": "Arc-length normalizzato sulla lunghezza totale della spline"
+    },
+    "transition": {
+      "enum": ["step", "linear", "smoothstep"],
+      "default": "smoothstep"
+    },
+    "side": { "enum": ["inner", "outer"] }
+  }
+}

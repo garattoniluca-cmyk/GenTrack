@@ -11,22 +11,24 @@
 |---|---|---|
 | `TRACKGEN_BRIEF.md` | Documento di progetto (fonte di verità) | ✅ |
 | `CLAUDE.md` + file memoria | Documentazione di lavoro | ✅ |
-| `shared/track_schema.json` | JSON Schema condiviso FE/BE, single source of truth | ⏳ |
+| `shared/track_schema.json` | JSON Schema condiviso FE/BE, single source of truth | ✅ |
+| `.claude/launch.json` | Config preview dev server (trackgen-frontend @5173) | ✅ |
 
 ## frontend/ (React + Vite + react-three-fiber)
 
 | File | Responsabilità | Stato |
 |---|---|---|
-| `src/main.jsx`, `src/App.jsx` | Entry point e shell app | ⏳ |
-| `src/state/trackStore.js` | Zustand store, unica fonte di verità | ⏳ |
-| `src/state/historyMiddleware.js` | Undo/redo | ⏳ |
-| `index.html`, `vite.config.js`, `package.json` | Setup build | ⏳ |
+| `src/main.jsx`, `src/App.jsx` | Entry point e shell app (toolbar, statusbar, pannello JSON) | ✅ |
+| `src/state/trackStore.js` | Zustand store: stage1Polygon + azioni (add/update/insert/close/reopen/reset) | ✅ |
+| `src/state/historyMiddleware.js` | Undo/redo con batching per drag (beginBatch/endBatch) | ✅ |
+| `index.html`, `vite.config.js`, `package.json` | Setup build (script: dev/build/test) | ✅ |
 
 ### src/geometry/ — logica pura, NO React, testabile isolata
 
 | File | Responsabilità | Fase | Stato |
 |---|---|---|---|
-| `polygon.js` | Validazione poligono, self-intersection (brute-force O(n²), n<100) | 1 | ⏳ |
+| `polygon.js` | Snap, self-intersection (polyline aperta + anello chiuso), lunghezze segmenti/totale (brute-force O(n²), n<100) | 1 | 🧪 |
+| `polygon.test.js` | 25 test sugli invarianti | 1 | ✅ |
 | `spline.js` | Catmull-Rom, arc-length resampling (lookup t→arcLength + inversione) | 2 | ⏳ |
 | `frame.js` | Parallel-transport frame lungo la curva | 3 | ⏳ |
 | `curvature.js` | Stima curvatura + euristica velocità `v=sqrt(a_lat/κ)` | 5 (usata anche in 4) | ⏳ |
@@ -45,7 +47,7 @@
 
 | File | Responsabilità | Fase | Stato |
 |---|---|---|---|
-| `editor2d/GridCanvas.jsx` | Disegno poligono su griglia snap | 1 | ⏳ |
+| `editor2d/GridCanvas.jsx` | Disegno+editing poligono: snap, validazione live, chiusura, zoom/pan, drag vertici, inserimento su segmento, etichette lunghezza | 1 | ✅ |
 | `editor2d/SplineEditor.jsx` | Editing punti di controllo spline | 2 | ⏳ |
 | `editor2d/ChannelEditor.jsx` | Grafici s→width/bank/elevation | 3 | ⏳ |
 | `viewer3d/Scene.jsx` | Scena r3f | 7 | ⏳ |

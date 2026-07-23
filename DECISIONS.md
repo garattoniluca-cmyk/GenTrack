@@ -74,6 +74,40 @@ simulazione fisica accurata.
 italiano, codice in inglese.
 **Motivazione**: continuità tra sessioni Claude Code.
 
+### D-010 — Konva.js per gli editor 2D (chiude P-001)
+**Data**: 2026-07-23 (approvata dall'utente)
+**Decisione**: tutti gli editor 2D (poligono, spline, canali, vie di fuga)
+usano Konva.js + react-konva.
+**Motivazione**: le fasi 2/3/5 sono manipolazione diretta di maniglie
+trascinabili (drag, hit-testing, hover) — esattamente ciò che Konva risolve;
+il canvas nativo richiederebbe di riscrivere questa infrastruttura 4 volte.
+**Scartato**: canvas nativo (zero dipendenze ma +2-3 giorni di codice
+infrastrutturale e più superficie di bug).
+
+### D-011 — Convenzione coordinate: metri, y-up
+**Data**: 2026-07-23
+**Decisione**: 1 unità griglia = 1 metro; asse y verso l'alto (coerente con
+Three.js). Lo Stage Konva usa `scaleY` negativa per la conversione dal sistema
+schermo (y-down); le etichette testo ri-flippano con `scaleY=-1` locale.
+La tolleranza di chiusura è in **pixel schermo** (indipendente dallo zoom).
+**Motivazione**: un'unica convenzione da fase 1 fino al 3D senza conversioni.
+
+### D-012 — Interazioni editing Fase 1
+**Data**: 2026-07-23
+**Decisione**:
+- Poligono **aperto** = modalità disegno: click aggiunge in coda; è consentito
+  creare intersezioni (evidenziate in rosso), ma la **chiusura è bloccata**
+  finché esistono conflitti (da brief §4.1).
+- Poligono **chiuso** = modalità editing: click su un segmento inserisce un
+  punto; i vertici sono trascinabili in entrambe le modalità (drag fluido,
+  snap alla griglia al rilascio).
+- Un drag = **un solo entry di undo** (batching nel historyMiddleware).
+- I valori derivati (conflitti, lunghezze) si calcolano nei componenti con
+  `useMemo` da funzioni pure — MAI selettori zustand che costruiscono nuovi
+  oggetti (causano loop infiniti di re-render con getSnapshot).
+**Motivazione**: separare disegno/editing evita ambiguità del click; il
+batching evita centinaia di undo-step per un singolo trascinamento.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD
@@ -84,8 +118,11 @@ italiano, codice in inglese.
 
 ## Decisioni pendenti
 
-- **P-001**: Konva.js vs canvas nativo per l'editor 2D (decidere allo sprint 2).
 - **P-002**: larghezza simmetrica singola vs `widthLeft`/`widthRight` fin
   dall'inizio (il brief cita l'asimmetria come opzione).
 - **P-003**: tensione per punto nella Catmull-Rom: variante custom o parametro
   ignorato nell'MVP.
+
+## Chiuse
+
+- ~~P-001~~ → D-010 (Konva.js).

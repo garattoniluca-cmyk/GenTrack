@@ -1,8 +1,6 @@
 # QUICKSTART.md — Setup e avvio
 
-> Stato: **pianificato** — il progetto non è ancora inizializzato. I comandi
-> sotto sono quelli previsti; verificare e correggere al momento del setup
-> (sprint 1).
+> Frontend attivo e verificato. Backend non ancora scaffoldato (rinviato).
 > Ultimo aggiornamento: 2026-07-23
 
 ## Prerequisiti
@@ -11,12 +9,12 @@
 - Python ≥ 3.11 (backend FastAPI)
 - Ambiente: Windows 11 (dev primario) — usare comandi cross-platform
 
-## Frontend (previsto)
+## Frontend (verificato ✓)
 
 ```bash
 cd frontend
 npm install
-npm run dev        # Vite dev server, tipicamente http://localhost:5173
+npm run dev        # Vite dev server su http://localhost:5173
 ```
 
 Build produzione:
@@ -25,13 +23,16 @@ Build produzione:
 npm run build
 ```
 
-Test (Vitest, da confermare):
+Test (Vitest — 25 test su geometry/):
 
 ```bash
 npm test
 ```
 
-## Backend (previsto)
+In Claude Code la preview si avvia con la config `trackgen-frontend`
+(`.claude/launch.json`).
+
+## Backend (previsto, non ancora scaffoldato)
 
 ```bash
 cd backend
@@ -58,10 +59,12 @@ pytest
 
 - [x] `git init` + .gitignore + repo GitHub collegato
       (https://github.com/garattoniluca-cmyk/GenTrack, branch `main`)
-- [ ] Scaffold frontend: Vite + React
-- [ ] Dipendenze: zustand, three, @react-three/fiber, @react-three/drei,
-      earcut, simplex-noise (+ konva se P-001 → Konva)
+- [x] Scaffold frontend: Vite + React
+- [x] Dipendenze fase 1: zustand, konva, react-konva, vitest
+      (three, @react-three/fiber, drei, earcut, simplex-noise: si installano
+      quando servono, dalle fasi 2-3 in poi)
 - [ ] Scaffold backend: FastAPI + Pydantic, struttura cartelle da FILES.md
-- [ ] `shared/track_schema.json` (prima versione, da brief §3)
-- [ ] `trackStore.js` vuoto + historyMiddleware
-- [ ] Aggiornare questo file con i comandi reali verificati
+      (rinviato allo sprint persistenza)
+- [x] `shared/track_schema.json` (prima versione, da brief §3)
+- [x] `trackStore.js` + historyMiddleware
+- [x] Aggiornare questo file con i comandi reali verificati
