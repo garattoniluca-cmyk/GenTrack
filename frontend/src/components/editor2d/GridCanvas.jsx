@@ -4,15 +4,16 @@
 // I Text (etichette) ri-flippano con scaleY=-1 locale per restare leggibili.
 //
 // Interazioni:
-//   click sinistro   → aggiungi punto (snap alla griglia) [poligono aperto]
+//   click sinistro   → aggiungi punto (snap alla griglia visibile) [aperto]
 //   click sul primo punto (≥3 punti) → chiudi il poligono
 //   drag su un vertice → sposta il punto (snap al rilascio)
-//   click su un segmento [poligono chiuso] → inserisci un punto lì
-//   Esc              → rimuovi ultimo punto
+//   click su un segmento [chiuso] → inserisci un punto lì
+//   tasto destro su vertice/segmento → menu contestuale
+//   Esc              → chiudi menu / rimuovi ultimo punto
 //   rotellina        → zoom sul puntatore
 //   drag rotellina o Space+drag → pan
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Arrow } from 'react-konva';
 import { useTrackStore } from '../../state/trackStore.js';
 import {
@@ -27,41 +28,32 @@ import {
   violatesClearance,
   signedArea,
 } from '../../geometry/polygon.js';
-import {
-  WORLD_HALF_EXTENT,
-  ZOOM_MIN,
-  ZOOM_MAX,
-  ZOOM_DEFAULT,
-} from '../../config.js';
+import { useCanvasView } from './useCanvasView.js';
+import GridLayer from './GridLayer.jsx';
+import { COLORS } from './colors.js';
 
-const CLOSE_TOLERANCE_PX = 12; // tolleranza chiusura in spazio SCHERMO (indipendente dallo zoom)
+const CLOSE_TOLERANCE_PX = 12; // tolleranza chiusura in spazio SCHERMO
 const LABEL_MIN_PX = 30; // mostra l'etichetta solo se il segmento a schermo è più lungo
 
-const COLORS = {
-  grid: '#2a2d33',
-  gridMajor: '#3a3e46',
-  axis: '#4a5060',
-  segment: '#8ab4f8',
-  segmentClosed: '#7ee787',
-  fillClosed: 'rgba(126, 231, 135, 0.08)',
-  conflict: '#f85149',
-  rubber: '#8ab4f866',
-  rubberConflict: '#f8514966',
-  vertex: '#c9d1d9',
-  vertexFirst: '#7ee787',
-  vertexFirstReady: '#2ea043',
-  label: '#e3b341',
-};
-
 export default function GridCanvas() {
-  const containerRef = useRef(null);
-  const stageRef = useRef(null);
-  const [size, setSize] = useState({ width: 800, height: 600 });
-  const [view, setView] = useState({ x: 0, y: 0, scale: ZOOM_DEFAULT }); // px per metro
-  const [cursorWorld, setCursorWorld] = useState(null);
-  const [spacePan, setSpacePan] = useState(false);
+  const {
+    containerRef,
+    stageRef,
+    size,
+    view,
+    cursorWorld,
+    spacePan,
+    worldToScreen,
+    pointerWorld,
+    onWheel,
+    onStageMouseDown,
+    onStageMouseMove,
+    scaleBarPx,
+    scaleBarLabel,
+  } = useCanvasView();
+
   const [hoverSeg, setHoverSeg] = useState(null);
-  // menu contestuale (tasto destro): {x, y} in px schermo + indice del punto
+  // menu contestuale (tasto destro): {kind, index, x, y} in px schermo
   const [ctxMenu, setCtxMenu] = useState(null);
 
   const polygon = useTrackStore((s) => s.stage1Polygon);
@@ -91,57 +83,23 @@ export default function GridCanvas() {
   const canCloseNow = useMemo(() => !closed && canClose(points), [points, closed]);
   const segments = useMemo(() => segmentLengths(points, closed), [points, closed]);
 
-  // passo di griglia VISIBILE: si ispessisce (×5) quando a schermo le celle
-  // scenderebbero sotto ~8px. Lo snap usa SEMPRE questo passo (griglia visibile).
+  // passo di griglia VISIBILE: lo snap usa sempre questo passo
   let effGrid = gridSize;
   while (effGrid * view.scale < 8) effGrid *= 5;
 
-  // --- dimensioni responsive del canvas ---
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const update = () => setSize({ width: el.clientWidth, height: el.clientHeight });
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  // --- vista iniziale: TUTTA l'area 5000×5000 m visibile, centrata sull'origine ---
-  const centeredRef = useRef(false);
-  useEffect(() => {
-    if (centeredRef.current || size.width === 0) return;
-    centeredRef.current = true;
-    const fitScale =
-      (Math.min(size.width, size.height) / (2 * WORLD_HALF_EXTENT)) * 0.95;
-    setView({
-      x: size.width / 2,
-      y: size.height / 2,
-      scale: Math.max(ZOOM_MIN, fitScale),
-    });
-  }, [size]);
-
-  // --- tastiera: Esc chiude il menu o rimuove l'ultimo punto, Space attiva pan ---
+  // --- tastiera: Esc chiude il menu o rimuove l'ultimo punto ---
   useEffect(() => {
     const down = (e) => {
       if (e.key === 'Escape') {
         if (ctxMenu) setCtxMenu(null);
         else removeLastPoint();
       }
-      if (e.code === 'Space') setSpacePan(true);
-    };
-    const up = (e) => {
-      if (e.code === 'Space') setSpacePan(false);
     };
     window.addEventListener('keydown', down);
-    window.addEventListener('keyup', up);
-    return () => {
-      window.removeEventListener('keydown', down);
-      window.removeEventListener('keyup', up);
-    };
+    return () => window.removeEventListener('keydown', down);
   }, [removeLastPoint, ctxMenu]);
 
-  // --- il menu contestuale si chiude su click altrove, wheel o zoom ---
+  // --- il menu contestuale si chiude su click altrove o wheel ---
   useEffect(() => {
     if (!ctxMenu) return;
     const close = () => setCtxMenu(null);
@@ -152,80 +110,6 @@ export default function GridCanvas() {
       window.removeEventListener('wheel', close);
     };
   }, [ctxMenu]);
-
-  // --- conversioni schermo ↔ mondo (y-up) ---
-  const screenToWorld = useCallback(
-    (sx, sy) => ({
-      x: (sx - view.x) / view.scale,
-      y: -(sy - view.y) / view.scale,
-    }),
-    [view]
-  );
-  const worldToScreen = useCallback(
-    (w) => ({ x: w.x * view.scale + view.x, y: -w.y * view.scale + view.y }),
-    [view]
-  );
-
-  const pointerWorld = () => {
-    const stage = stageRef.current;
-    if (!stage) return null;
-    const pos = stage.getPointerPosition();
-    if (!pos) return null;
-    return screenToWorld(pos.x, pos.y);
-  };
-
-  // --- zoom sulla rotellina, centrato sul puntatore ---
-  const onWheel = (e) => {
-    e.evt.preventDefault();
-    const stage = stageRef.current;
-    const pos = stage.getPointerPosition();
-    const factor = e.evt.deltaY < 0 ? 1.15 : 1 / 1.15;
-    setView((v) => {
-      const scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, v.scale * factor));
-      const k = scale / v.scale;
-      return {
-        scale,
-        x: pos.x - (pos.x - v.x) * k,
-        y: pos.y - (pos.y - v.y) * k,
-      };
-    });
-  };
-
-  // --- pan con drag rotellina o Space+drag ---
-  const panState = useRef(null);
-  const onMouseDown = (e) => {
-    if (e.evt.button === 1 || (e.evt.button === 0 && spacePan)) {
-      e.evt.preventDefault();
-      panState.current = {
-        startX: e.evt.clientX,
-        startY: e.evt.clientY,
-        viewX: view.x,
-        viewY: view.y,
-      };
-    }
-  };
-  const onMouseMove = () => {
-    const w = pointerWorld();
-    if (w) setCursorWorld(w);
-  };
-  useEffect(() => {
-    const move = (e) => {
-      if (!panState.current) return;
-      const { startX, startY, viewX, viewY } = panState.current;
-      setView((v) => ({
-        ...v,
-        x: viewX + (e.clientX - startX),
-        y: viewY + (e.clientY - startY),
-      }));
-    };
-    const up = () => (panState.current = null);
-    window.addEventListener('mousemove', move);
-    window.addEventListener('mouseup', up);
-    return () => {
-      window.removeEventListener('mousemove', move);
-      window.removeEventListener('mouseup', up);
-    };
-  }, []);
 
   // --- click sullo Stage: chiusura o aggiunta punto in coda (solo aperto) ---
   const onClick = (e) => {
@@ -253,12 +137,10 @@ export default function GridCanvas() {
   // --- drag di un vertice ---
   const onVertexDragStart = () => beginBatch();
   const onVertexDragMove = (i) => (e) => {
-    // fluido durante il drag (no snap): la mesh segue in tempo reale
-    updatePoint(i, { x: e.target.x(), y: e.target.y() }, false);
+    updatePoint(i, { x: e.target.x(), y: e.target.y() }, false); // fluido
   };
   const onVertexDragEnd = (i) => (e) => {
-    // snap finale sulla griglia visibile
-    updatePoint(i, { x: e.target.x(), y: e.target.y() }, true, effGrid);
+    updatePoint(i, { x: e.target.x(), y: e.target.y() }, true, effGrid); // snap finale
     endBatch();
   };
 
@@ -270,15 +152,13 @@ export default function GridCanvas() {
     if (w) insertPointOnSegment(segIndex, w, effGrid);
   };
 
-  // --- tasto destro su un vertice: apri il menu contestuale ---
+  // --- menu contestuale ---
   const onVertexContextMenu = (i) => (e) => {
     e.evt.preventDefault();
     e.cancelBubble = true;
     const pos = stageRef.current.getPointerPosition();
     if (pos) setCtxMenu({ kind: 'vertex', index: i, x: pos.x, y: pos.y });
   };
-
-  // --- tasto destro su un segmento (poligono chiuso): menu con "Imposta start" ---
   const onSegmentContextMenu = (segIndex) => (e) => {
     e.evt.preventDefault();
     if (!closed) return;
@@ -293,7 +173,6 @@ export default function GridCanvas() {
   // --- dati derivati per il render ---
   const snappedCursor = cursorWorld && !closed ? snapToGrid(cursorWorld, effGrid) : null;
 
-  // il candidato sotto il cursore viola la distanza minima? (feedback rosso)
   const cursorClearanceViolated =
     snappedCursor && points.length >= 1
       ? violatesClearance(points, snappedCursor, minClearance)
@@ -318,67 +197,6 @@ export default function GridCanvas() {
     cursorWorld &&
     dist(cursorWorld, points[0]) * view.scale <= CLOSE_TOLERANCE_PX;
 
-  // griglia disegnata con lo stesso passo usato dallo snap
-  const gridStep = effGrid;
-
-  // disegna solo le linee visibili nel viewport (l'area è 5000×5000 m)
-  const E = WORLD_HALF_EXTENT;
-  const visXMin = Math.max(-E, (0 - view.x) / view.scale);
-  const visXMax = Math.min(E, (size.width - view.x) / view.scale);
-  const visYMin = Math.max(-E, -(size.height - view.y) / view.scale);
-  const visYMax = Math.min(E, -(0 - view.y) / view.scale);
-
-  const gridLines = [];
-  const startX = Math.ceil(visXMin / gridStep) * gridStep;
-  for (let v = startX; v <= visXMax; v += gridStep) {
-    const major = Math.abs(v % (gridStep * 5)) < 1e-9;
-    gridLines.push(
-      <Line
-        key={`v${v}`}
-        points={[v, Math.max(-E, visYMin), v, Math.min(E, visYMax)]}
-        stroke={v === 0 ? COLORS.axis : major ? COLORS.gridMajor : COLORS.grid}
-        strokeWidth={(v === 0 ? 1.5 : 1) / view.scale}
-        listening={false}
-      />
-    );
-  }
-  const startY = Math.ceil(visYMin / gridStep) * gridStep;
-  for (let v = startY; v <= visYMax; v += gridStep) {
-    const major = Math.abs(v % (gridStep * 5)) < 1e-9;
-    gridLines.push(
-      <Line
-        key={`h${v}`}
-        points={[Math.max(-E, visXMin), v, Math.min(E, visXMax), v]}
-        stroke={v === 0 ? COLORS.axis : major ? COLORS.gridMajor : COLORS.grid}
-        strokeWidth={(v === 0 ? 1.5 : 1) / view.scale}
-        listening={false}
-      />
-    );
-  }
-  // bordo dell'area di lavoro
-  gridLines.push(
-    <Line
-      key="worldBounds"
-      points={[-E, -E, E, -E, E, E, -E, E]}
-      closed
-      stroke={COLORS.axis}
-      strokeWidth={2 / view.scale}
-      dash={[10 / view.scale, 6 / view.scale]}
-      listening={false}
-    />
-  );
-
-  // --- barra di scala (come nelle cartine): lunghezza "tonda" 1-2-5×10^n ---
-  const targetPx = 120;
-  const rawLen = targetPx / view.scale;
-  const pow10 = Math.pow(10, Math.floor(Math.log10(rawLen)));
-  const niceLen =
-    [1, 2, 5, 10].map((m) => m * pow10).find((c) => c * view.scale >= 70) ??
-    10 * pow10;
-  const scaleBarPx = niceLen * view.scale;
-  const scaleBarLabel =
-    niceLen >= 1000 ? `${niceLen / 1000} km` : `${niceLen} m`;
-
   const flat = points.flatMap((p) => [p.x, p.y]);
   const vertexR = 5 / view.scale;
   const fontSize = 11 / view.scale;
@@ -388,10 +206,8 @@ export default function GridCanvas() {
     closed && polygon.startSegment != null
       ? segments.find((s) => s.index === polygon.startSegment) ?? null
       : null;
-  let travelDir = null; // versore di percorrenza sul segmento start
+  let travelDir = null;
   if (startSeg && polygon.direction && startSeg.length > 0) {
-    // l'ordine dei punti percorre il poligono nel winding dato da signedArea;
-    // se il verso scelto non coincide, si percorre in ordine inverso
     const windingCcw = signedArea(points) > 0;
     const forward = (polygon.direction === 'ccw') === windingCcw;
     const from = forward ? startSeg.a : startSeg.b;
@@ -406,7 +222,7 @@ export default function GridCanvas() {
     <div
       ref={containerRef}
       className="canvas-container"
-      onContextMenu={(e) => e.preventDefault()} // il tasto destro è dell'app, non del browser
+      onContextMenu={(e) => e.preventDefault()}
       style={{
         cursor: spacePan
           ? 'grab'
@@ -426,14 +242,13 @@ export default function GridCanvas() {
         scaleX={view.scale}
         scaleY={-view.scale} // y-up
         onWheel={onWheel}
-        onMouseDown={onMouseDown}
-        onMouseMove={onMouseMove}
+        onMouseDown={onStageMouseDown}
+        onMouseMove={onStageMouseMove}
         onClick={onClick}
       >
-        <Layer listening={false}>{gridLines}</Layer>
+        <GridLayer view={view} size={size} effGrid={effGrid} />
 
         <Layer>
-          {/* poligono chiuso: riempimento */}
           {closed && (
             <Line
               points={flat}
@@ -452,11 +267,7 @@ export default function GridCanvas() {
                 key={`s${seg.index}`}
                 points={[seg.a.x, seg.a.y, seg.b.x, seg.b.y]}
                 stroke={
-                  bad
-                    ? COLORS.conflict
-                    : closed
-                      ? COLORS.segmentClosed
-                      : COLORS.segment
+                  bad ? COLORS.conflict : closed ? COLORS.segmentClosed : COLORS.segment
                 }
                 strokeWidth={((bad ? 3 : 2) + (hoverSeg === seg.index ? 1 : 0)) / view.scale}
                 hitStrokeWidth={closed ? 12 / view.scale : 0}
@@ -523,12 +334,11 @@ export default function GridCanvas() {
             </Group>
           )}
 
-          {/* etichette lunghezza segmenti (ri-flippate per il y-up dello stage) */}
+          {/* etichette lunghezza segmenti */}
           {segments.map((seg) => {
             if (seg.length * view.scale < LABEL_MIN_PX) return null;
             const label = `${seg.length.toFixed(1)} m`;
             const mid = { x: (seg.a.x + seg.b.x) / 2, y: (seg.a.y + seg.b.y) / 2 };
-            // offset perpendicolare al segmento per non coprire la linea
             const dx = seg.b.x - seg.a.x;
             const dy = seg.b.y - seg.a.y;
             const len = seg.length || 1;
@@ -542,7 +352,7 @@ export default function GridCanvas() {
                 fontSize={fontSize}
                 fill={COLORS.label}
                 scaleY={-1}
-                offsetX={(label.length * fontSize * 0.27)}
+                offsetX={label.length * fontSize * 0.27}
                 offsetY={fontSize / 2}
                 listening={false}
               />
@@ -583,14 +393,14 @@ export default function GridCanvas() {
                 fontSize={fontSize}
                 fill={COLORS.rubber}
                 scaleY={-1}
-                offsetX={(label.length * fontSize * 0.27)}
+                offsetX={label.length * fontSize * 0.27}
                 offsetY={fontSize / 2 + 10 / view.scale}
                 listening={false}
               />
             );
           })()}
 
-          {/* anteprima segmento di chiusura quando il mouse è sul primo punto */}
+          {/* anteprima segmento di chiusura */}
           {!closed && nearFirst && points.length >= 3 && (
             <Line
               points={[
@@ -606,7 +416,7 @@ export default function GridCanvas() {
             />
           )}
 
-          {/* vertici: trascinabili per la modifica */}
+          {/* vertici: trascinabili */}
           <Group>
             {points.map((p, i) => (
               <Circle
@@ -650,7 +460,6 @@ export default function GridCanvas() {
                 strokeWidth={1.5 / view.scale}
                 listening={false}
               />
-              {/* raggio di rispetto attorno al candidato rifiutato */}
               {cursorClearanceViolated && (
                 <Circle
                   x={snappedCursor.x}
@@ -672,7 +481,8 @@ export default function GridCanvas() {
         {cursorWorld && (
           <span>
             x: {cursorWorld.x.toFixed(1)} m &nbsp; y: {cursorWorld.y.toFixed(1)} m
-            &nbsp;·&nbsp; zoom: {view.scale >= 1 ? view.scale.toFixed(0) : view.scale.toFixed(2)} px/m
+            &nbsp;·&nbsp; zoom:{' '}
+            {view.scale >= 1 ? view.scale.toFixed(0) : view.scale.toFixed(2)} px/m
           </span>
         )}
       </div>

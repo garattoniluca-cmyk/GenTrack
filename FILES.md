@@ -29,7 +29,8 @@
 |---|---|---|---|
 | `polygon.js` | Snap, self-intersection (polyline aperta + anello chiuso), lunghezze segmenti/totale (brute-force O(n²), n<100) | 1 | 🧪 |
 | `polygon.test.js` | 25 test sugli invarianti | 1 | ✅ |
-| `spline.js` | Catmull-Rom, arc-length resampling (lookup t→arcLength + inversione) | 2 | ⏳ |
+| `spline.js` | Catmull-Rom centripeta chiusa, arc-length resampling adattivo, generazione CP da poligono (CP0 = metà start) | 2 | 🧪 |
+| `spline.test.js` | 13 test sugli invarianti (2πR, spaziatura, ancoraggio, verso) | 2 | ✅ |
 | `frame.js` | Parallel-transport frame lungo la curva | 3 | ⏳ |
 | `curvature.js` | Stima curvatura + euristica velocità `v=sqrt(a_lat/κ)` | 5 (usata anche in 4) | ⏳ |
 | `sectionProfile.js` | Profili trasversali (wall_edge, secondary_surface), interpolazione | 3 | ⏳ |
@@ -47,8 +48,11 @@
 
 | File | Responsabilità | Fase | Stato |
 |---|---|---|---|
-| `editor2d/GridCanvas.jsx` | Disegno+editing poligono: snap, validazione live, chiusura, zoom/pan, drag vertici, inserimento su segmento, etichette lunghezza | 1 | ✅ |
-| `editor2d/SplineEditor.jsx` | Editing punti di controllo spline | 2 | ⏳ |
+| `editor2d/GridCanvas.jsx` | Disegno+editing poligono: snap, validazione live, chiusura, zoom/pan, drag vertici, inserimento su segmento, etichette, start/verso, menu destro | 1 | ✅ |
+| `editor2d/SplineEditor.jsx` | Editing CP spline: drag, inserimento su curva, menu destro, marker s=0, poligono ghost | 2 | ✅ |
+| `editor2d/useCanvasView.js` | Hook vista condivisa: fit, zoom, pan, conversioni y-up, scalebar | — | ✅ |
+| `editor2d/GridLayer.jsx` | Griglia + bordo area, render solo viewport | — | ✅ |
+| `editor2d/colors.js` | Palette condivisa editor | — | ✅ |
 | `editor2d/ChannelEditor.jsx` | Grafici s→width/bank/elevation | 3 | ⏳ |
 | `viewer3d/Scene.jsx` | Scena r3f | 7 | ⏳ |
 | `viewer3d/TrackMesh.jsx` | Render tubo di flusso (multi-material/vertex colors) | 7 | ⏳ |

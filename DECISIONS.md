@@ -163,6 +163,31 @@ lunghezza mostrata); se un editing successivo accorcia lo start sotto il
 minimo, la statusbar mostra un errore ma lo start non viene rimosso
 automaticamente.
 
+### D-016 — Catmull-Rom centripeta implementata in proprio (Fase 2)
+**Data**: 2026-07-23 (approvata dall'utente)
+**Decisione**: la spline di Fase 2 è una Catmull-Rom **centripeta** (α=0.5,
+Barry-Goldman) chiusa, implementata in `geometry/spline.js` senza three.js
+(2D puro; three arriverà col 3D in Fase 3). Ricampionamento arc-length
+adattivo: 1 sample ogni ~5 m, clamp [200, 2000].
+**Motivazione**: la centripeta evita cuspidi/auto-loop; niente dipendenza 3D
+prematura. **P-003 chiusa**: tension per punto RINVIATA (campo `tension`
+resta nello schema per il futuro).
+**Scartato**: three.CatmullRomCurve3 (porta tutta la dipendenza three per
+una curva 2D); tension per punto ora (UI+matematica non necessarie).
+
+### D-017 — Ancoraggio s=0 e derivazione Fase 1 → Fase 2
+**Data**: 2026-07-23 (approvata dall'utente)
+**Decisione**: il PRIMO control point è un punto extra alla **metà del
+rettilineo di start** → s=0 cade esattamente lì; i CP successivi sono i
+vertici del poligono ordinati nel **verso di percorrenza** scelto. CP0 non è
+eliminabile (è l'ancora di s=0). Rigenerazione: entrando in Fase 2, se
+l'impronta dello stage1 (punti+start+verso) è cambiata e ci sono modifiche
+manuali, si chiede conferma prima di rigenerare (le modifiche si perdono —
+pipeline derivativa, brief §1). `resampledArcLength` NON vive nello store:
+è derivato puro dai CP (useMemo nei componenti) — undo/redo sempre coerente.
+**Motivazione**: s=0 esatto sulla linea del traguardo; lo start ha ≥700 m
+(D-015) quindi il CP extra a metà rettilineo non distorce la curva.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD

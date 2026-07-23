@@ -3,10 +3,10 @@
 > Snapshot dello stato corrente. Aggiornare a ogni sessione di lavoro.
 > Ultimo aggiornamento: **2026-07-23**
 
-## Stato: FASE 1 IMPLEMENTATA (in validazione utente)
+## Stato: FASE 2 IMPLEMENTATA (in validazione utente)
 
-Editor poligonale 2D funzionante su http://localhost:5173 (`npm run dev` in
-`frontend/`). 25 test unitari verdi su `geometry/polygon.js`.
+Editor poligonale (Fase 1) + editor spline (Fase 2) su http://localhost:5173.
+51 test unitari verdi (`geometry/polygon.js` + `geometry/spline.js`).
 
 ## Fatto
 
@@ -52,10 +52,26 @@ Editor poligonale 2D funzionante su http://localhost:5173 (`npm run dev` in
 - [x] 2026-07-23 — **Lunghezza minima start 700 m** configurabile ("Start min"
       in toolbar): menu disabilitato sui segmenti corti, errore in statusbar
       se un editing accorcia lo start sotto il minimo.
-- [ ] Fase 1: **validazione visiva/interattiva dell'utente** in corso.
+- [x] 2026-07-23 — **Fase 2 implementata** (scope approvato; niente Fase 3):
+      - `geometry/spline.js`: Catmull-Rom centripeta chiusa (Barry-Goldman),
+        ricampionamento arc-length adattivo (~5 m, clamp 200-2000),
+        `generateControlPointsFromPolygon` (CP0 = metà start, ordine = verso)
+        — 13 test nuovi, tot **51 verdi** (D-016, D-017; P-003 chiusa: rinviata)
+      - Refactor editor: `useCanvasView` (vista/zoom/pan/scalebar condivisi),
+        `GridLayer`, `colors.js` — GridCanvas riscritto sull'infrastruttura
+      - `SplineEditor.jsx`: poligono ghost, curva, drag CP, click sulla curva
+        per inserire CP, menu destro (CP0 non eliminabile), marker s=0 +
+        freccia verso, lunghezza reale in statusbar
+      - Store: slice `stage2Spline` (solo CP + fingerprint; resample derivato
+        puro), `phase` UI, tab fase in toolbar (Fase 2 gated su
+        chiuso+start+lunghezza minima), conferma rigenerazione se stage1 cambia
+      - Dev: `window.__trackStore` esposto in DEV per debug/collaudo
+      - Collaudo e2e via store: tracciato 9 punti → 5107.7 m, 1022 sample,
+        CP0 esattamente a metà start, ordine antiorario corretto
+- [ ] Fase 2: **validazione visiva/interattiva dell'utente** in corso.
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —
-      la verifica interattiva va fatta a mano dall'utente.
+      collaudo via `window.__trackStore` + verifica interattiva manuale.
 
 ## In corso
 
@@ -64,7 +80,7 @@ Editor poligonale 2D funzionante su http://localhost:5173 (`npm run dev` in
 ## Prossimi passi (ordine sprint dal brief, §7)
 
 1. ~~Setup repo~~ ✓ (manca solo lo scaffold backend, rinviato)
-2. ~~Fase 1~~ ✓ → Fase 2: spline con arc-length resampling (senza 3D)
+2. ~~Fase 1~~ ✓ · ~~Fase 2~~ ✓ → prossima: Fase 3 (tubo di flusso — NON ancora autorizzata)
 3. Fase 3 base: estrusione flat con profilo fisso (validare frame + strip triangolare)
 4. Canali width/banking/elevation con keyframe e interpolazione
 5. Fase 6: terreno base (falloff costante, senza vie di fuga)

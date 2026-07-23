@@ -11,6 +11,7 @@ import {
   signedArea,
   dist,
 } from '../geometry/polygon.js';
+import { generateControlPointsFromPolygon } from '../geometry/spline.js';
 import {
   DEFAULT_GRID_SIZE,
   DEFAULT_MIN_CLEARANCE,
@@ -33,10 +34,30 @@ const initialPolygon = {
  */
 const snapClamp = (p, snapSize) => snapToGrid(clampToWorld(p), snapSize);
 
+/**
+ * Impronta della parte di stage1 da cui deriva la spline: se cambia, i
+ * control point della Fase 2 vanno rigenerati (pipeline reversibile, brief §1).
+ */
+export const computeStage1Fingerprint = (stage1) =>
+  JSON.stringify([stage1.points, stage1.startSegment, stage1.direction]);
+
+const initialSpline = {
+  controlPoints: [], // [{id, x, y, tension}] — CP0 = metà rettilineo start (s=0)
+  sourceFingerprint: null, // impronta dello stage1 da cui sono stati generati
+};
+
 export const useTrackStore = create(
   withHistory(
     (set, get) => ({
       stage1Polygon: initialPolygon,
+      stage2Spline: initialSpline,
+
+      /** Fase attiva della pipeline nell'UI (1 = poligonale, 2 = spline). */
+      phase: 1,
+      setPhase: (p) => {
+        if (p !== 1 && p !== 2) return;
+        set({ phase: p });
+      },
 
       /** Distanza minima (m) di un punto nuovo da punti/segmenti esistenti. */
       minClearance: DEFAULT_MIN_CLEARANCE,
@@ -173,6 +194,79 @@ export const useTrackStore = create(
         set({ stage1Polygon: { ...stage1Polygon, gridSize } });
       },
 
+      // ---- Fase 2: spline ----
+
+      /**
+       * (Ri)genera i control point dal poligono di Fase 1. Se l'impronta dello
+       * stage1 non è cambiata e i CP esistono già, non fa nulla (conserva le
+       * modifiche manuali); force=true rigenera comunque.
+       */
+      generateSplineFromPolygon: (force = false) => {
+        const { stage1Polygon, stage2Spline } = get();
+        if (!stage1Polygon.closed || stage1Polygon.startSegment == null) return;
+        const fp = computeStage1Fingerprint(stage1Polygon);
+        if (
+          !force &&
+          stage2Spline.controlPoints.length >= 3 &&
+          stage2Spline.sourceFingerprint === fp
+        ) {
+          return;
+        }
+        const controlPoints = generateControlPointsFromPolygon(
+          stage1Polygon.points,
+          stage1Polygon.startSegment,
+          stage1Polygon.direction
+        );
+        set({ stage2Spline: { controlPoints, sourceFingerprint: fp } });
+      },
+
+      /** Sposta un control point (drag: snap=false fluido, true al rilascio). */
+      moveControlPoint: (index, worldPoint, snap = true, snapSize) => {
+        const { stage2Spline, stage1Polygon } = get();
+        const cps = stage2Spline.controlPoints;
+        if (index < 0 || index >= cps.length) return;
+        const p = snap
+          ? snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize)
+          : clampToWorld(worldPoint);
+        const next = cps.slice();
+        next[index] = { ...next[index], x: p.x, y: p.y };
+        set({ stage2Spline: { ...stage2Spline, controlPoints: next } });
+      },
+
+      /** Inserisce un CP dopo l'indice `afterIndex` (click sulla curva). */
+      insertControlPoint: (afterIndex, worldPoint, snapSize) => {
+        const { stage2Spline, stage1Polygon } = get();
+        const cps = stage2Spline.controlPoints;
+        if (afterIndex < 0 || afterIndex >= cps.length) return;
+        const p = snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize);
+        const maxId = cps.reduce(
+          (m, cp) => Math.max(m, parseInt(cp.id.replace('cp_', ''), 10) || 0),
+          0
+        );
+        const next = cps.slice();
+        next.splice(afterIndex + 1, 0, {
+          id: `cp_${maxId + 1}`,
+          x: p.x,
+          y: p.y,
+          tension: 0.5,
+        });
+        set({ stage2Spline: { ...stage2Spline, controlPoints: next } });
+      },
+
+      /**
+       * Rimuove un control point. CP0 (ancora s=0 sullo start) non è
+       * rimovibile; la spline chiusa richiede almeno 3 CP.
+       */
+      removeControlPoint: (index) => {
+        const { stage2Spline } = get();
+        const cps = stage2Spline.controlPoints;
+        if (index <= 0 || index >= cps.length) return;
+        if (cps.length <= 3) return;
+        const next = cps.slice();
+        next.splice(index, 1);
+        set({ stage2Spline: { ...stage2Spline, controlPoints: next } });
+      },
+
       /**
        * Sposta il punto `index`. snap=false durante il drag (movimento fluido),
        * snap=true al rilascio (aggancio alla griglia).
@@ -226,8 +320,13 @@ export const useTrackStore = create(
       },
     }),
     {
-      // Undo/redo traccia solo il poligono (non lo zoom/pan della vista)
-      partialize: (state) => ({ stage1Polygon: state.stage1Polygon }),
+      // Undo/redo traccia i dati delle fasi (non zoom/pan né la fase attiva).
+      // resampledArcLength NON è nello store: è derivato puro dai CP
+      // (calcolato con useMemo nei componenti) — l'undo resta consistente.
+      partialize: (state) => ({
+        stage1Polygon: state.stage1Polygon,
+        stage2Spline: state.stage2Spline,
+      }),
     }
   )
 );
@@ -236,3 +335,8 @@ export const useTrackStore = create(
 // causerebbero re-render infiniti (getSnapshot non cachato). I valori derivati
 // (conflitti, canClose, …) si calcolano nei componenti con useMemo, chiamando
 // direttamente le funzioni pure di geometry/polygon.js.
+
+// Solo in dev: store accessibile dalla console per debug/collaudo.
+if (import.meta.env.DEV) {
+  window.__trackStore = useTrackStore;
+}

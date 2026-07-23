@@ -1,16 +1,24 @@
-// App.jsx — shell TrackGen. Fase 1: editor poligonale + pannello stato.
+// App.jsx — shell TrackGen: switcher di fase, toolbar, statusbar, pannello dati.
 import { useMemo } from 'react';
 import GridCanvas from './components/editor2d/GridCanvas.jsx';
-import { useTrackStore } from './state/trackStore.js';
+import SplineEditor from './components/editor2d/SplineEditor.jsx';
+import {
+  useTrackStore,
+  computeStage1Fingerprint,
+} from './state/trackStore.js';
 import {
   findSelfIntersections,
   ringSelfIntersections,
   segmentLengths,
   canClose,
 } from './geometry/polygon.js';
+import { resampleClosedSpline } from './geometry/spline.js';
 
 export default function App() {
+  const phase = useTrackStore((s) => s.phase);
+  const setPhase = useTrackStore((s) => s.setPhase);
   const polygon = useTrackStore((s) => s.stage1Polygon);
+  const spline = useTrackStore((s) => s.stage2Spline);
   const setGridSize = useTrackStore((s) => s.setGridSize);
   const minClearance = useTrackStore((s) => s.minClearance);
   const setMinClearance = useTrackStore((s) => s.setMinClearance);
@@ -43,10 +51,13 @@ export default function App() {
     () => segments.reduce((sum, s) => sum + s.length, 0),
     [segments]
   );
-  // polygon è già nella forma dello schema condiviso (points, gridSize, closed)
-  const stage1Schema = polygon;
 
-  // lunghezza del segmento start attuale (per il warning se sotto il minimo)
+  // Fase 2: ricampionamento derivato (stesso memo dell'editor)
+  const resampled = useMemo(
+    () => resampleClosedSpline(spline.controlPoints),
+    [spline.controlPoints]
+  );
+
   const startSegLength =
     polygon.startSegment != null
       ? (segments.find((s) => s.index === polygon.startSegment)?.length ?? 0)
@@ -54,68 +65,122 @@ export default function App() {
   const startTooShort =
     startSegLength != null && startSegLength < minStartLength;
 
-  const status = polygon.closed
-    ? { text: 'Poligono chiuso ✓', cls: 'ok' }
-    : conflicts.length > 0
-      ? { text: `${conflicts.length} intersezioni — chiusura bloccata`, cls: 'err' }
-      : canCloseNow
-        ? { text: 'Pronto a chiudere — clicca sul primo punto', cls: 'ready' }
-        : { text: `${polygon.points.length} punti — disegna la poligonale`, cls: '' };
+  const phase2Ready =
+    polygon.closed && polygon.startSegment != null && !startTooShort;
+
+  // ingresso in Fase 2: genera/rigenera i CP se il poligono è cambiato
+  const goPhase2 = () => {
+    if (!phase2Ready) return;
+    const st = useTrackStore.getState();
+    const fp = computeStage1Fingerprint(st.stage1Polygon);
+    const hasEdits =
+      st.stage2Spline.controlPoints.length >= 3 &&
+      st.stage2Spline.sourceFingerprint !== fp;
+    if (hasEdits) {
+      const ok = window.confirm(
+        'Il poligono è cambiato dalla generazione della spline.\n' +
+          'Rigenerare i control point? Le modifiche manuali alla spline andranno perse.'
+      );
+      if (!ok) return;
+      st.generateSplineFromPolygon(true);
+    } else {
+      st.generateSplineFromPolygon();
+    }
+    setPhase(2);
+  };
+
+  const status =
+    phase === 2
+      ? {
+          text: `${spline.controlPoints.length} control point · ${resampled.sampleCount} sample`,
+          cls: 'ok',
+        }
+      : polygon.closed
+        ? { text: 'Poligono chiuso ✓', cls: 'ok' }
+        : conflicts.length > 0
+          ? { text: `${conflicts.length} intersezioni — chiusura bloccata`, cls: 'err' }
+          : canCloseNow
+            ? { text: 'Pronto a chiudere — clicca sul primo punto', cls: 'ready' }
+            : { text: `${polygon.points.length} punti — disegna la poligonale`, cls: '' };
 
   return (
     <div className="app">
       <header className="toolbar">
         <h1>TrackGen</h1>
-        <span className="phase-badge">Fase 1 — Poligonale</span>
 
-        <label>
-          Griglia (m)
-          <input
-            type="number"
-            min="1"
-            step="1"
-            value={polygon.gridSize}
-            onChange={(e) => setGridSize(parseFloat(e.target.value))}
-          />
-        </label>
+        <div className="phase-tabs">
+          <button
+            className={phase === 1 ? 'active' : ''}
+            onClick={() => setPhase(1)}
+          >
+            1 · Poligonale
+          </button>
+          <button
+            className={phase === 2 ? 'active' : ''}
+            disabled={!phase2Ready}
+            title={
+              phase2Ready
+                ? 'Editing spline'
+                : 'Chiudi il poligono e imposta lo start per accedere'
+            }
+            onClick={goPhase2}
+          >
+            2 · Spline
+          </button>
+        </div>
 
-        <label title="Distanza minima di un punto nuovo da punti e segmenti esistenti">
-          Dist. min (m)
-          <input
-            type="number"
-            min="0"
-            step="10"
-            value={minClearance}
-            onChange={(e) => setMinClearance(parseFloat(e.target.value))}
-          />
-        </label>
+        {phase === 1 && (
+          <>
+            <label>
+              Griglia (m)
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={polygon.gridSize}
+                onChange={(e) => setGridSize(parseFloat(e.target.value))}
+              />
+            </label>
 
-        <label title="Lunghezza minima del rettilineo di start">
-          Start min (m)
-          <input
-            type="number"
-            min="0"
-            step="50"
-            value={minStartLength}
-            onChange={(e) => setMinStartLength(parseFloat(e.target.value))}
-          />
-        </label>
+            <label title="Distanza minima di un punto nuovo da punti e segmenti esistenti">
+              Dist. min (m)
+              <input
+                type="number"
+                min="0"
+                step="10"
+                value={minClearance}
+                onChange={(e) => setMinClearance(parseFloat(e.target.value))}
+              />
+            </label>
 
-        {polygon.closed && (
-          <div className="direction-toggle" title="Verso di percorrenza">
-            <button
-              className={polygon.direction === 'cw' ? 'active' : ''}
-              onClick={() => setDirection('cw')}
-            >
-              ⟳ Orario
-            </button>
-            <button
-              className={polygon.direction === 'ccw' ? 'active' : ''}
-              onClick={() => setDirection('ccw')}
-            >
-              ⟲ Antiorario
-            </button>
-          </div>
+            <label title="Lunghezza minima del rettilineo di start">
+              Start min (m)
+              <input
+                type="number"
+                min="0"
+                step="50"
+                value={minStartLength}
+                onChange={(e) => setMinStartLength(parseFloat(e.target.value))}
+              />
+            </label>
+
+            {polygon.closed && (
+              <div className="direction-toggle" title="Verso di percorrenza">
+                <button
+                  className={polygon.direction === 'cw' ? 'active' : ''}
+                  onClick={() => setDirection('cw')}
+                >
+                  ⟳ Orario
+                </button>
+                <button
+                  className={polygon.direction === 'ccw' ? 'active' : ''}
+                  onClick={() => setDirection('ccw')}
+                >
+                  ⟲ Antiorario
+                </button>
+              </div>
+            )}
+          </>
         )}
 
         <button onClick={undo} disabled={historyPast === 0} title="Annulla">
@@ -124,81 +189,137 @@ export default function App() {
         <button onClick={redo} disabled={historyFuture === 0} title="Ripristina">
           ↪ Redo
         </button>
-        {polygon.closed && (
+        {phase === 1 && polygon.closed && (
           <button onClick={reopenPolygon} title="Riapri per modificare">
             ✎ Riapri
           </button>
         )}
-        <button
-          className="danger"
-          onClick={resetPolygon}
-          disabled={polygon.points.length === 0}
-        >
-          ✕ Reset
-        </button>
+        {phase === 1 && (
+          <button
+            className="danger"
+            onClick={resetPolygon}
+            disabled={polygon.points.length === 0}
+          >
+            ✕ Reset
+          </button>
+        )}
 
         <span className={`status ${status.cls}`}>{status.text}</span>
       </header>
 
       <main className="workspace">
-        <GridCanvas />
+        {phase === 1 ? <GridCanvas /> : <SplineEditor />}
 
         <aside className="side-panel">
-          <h2>stage1_polygon</h2>
-          <pre>{JSON.stringify(stage1Schema, null, 2)}</pre>
-          <div className="hints">
-            <h3>Comandi</h3>
-            <ul>
-              <li><b>Click</b> — aggiungi punto</li>
-              <li><b>Click sul primo punto</b> — chiudi</li>
-              <li><b>Drag su un vertice</b> — sposta punto</li>
-              <li><b>Tasto destro su un vertice</b> — menu (Elimina punto)</li>
-              <li><b>Click su un segmento</b> (chiuso) — inserisci punto</li>
-              <li><b>Tasto destro su un segmento</b> (chiuso) — imposta start</li>
-              <li><b>Esc</b> — rimuovi ultimo punto</li>
-              <li><b>Rotellina</b> — zoom</li>
-              <li><b>Space + drag</b> / rotellina premuta — pan</li>
-            </ul>
-          </div>
+          {phase === 1 ? (
+            <>
+              <h2>stage1_polygon</h2>
+              <pre>{JSON.stringify(polygon, null, 2)}</pre>
+              <div className="hints">
+                <h3>Comandi</h3>
+                <ul>
+                  <li><b>Click</b> — aggiungi punto</li>
+                  <li><b>Click sul primo punto</b> — chiudi</li>
+                  <li><b>Drag su un vertice</b> — sposta punto</li>
+                  <li><b>Tasto destro su un vertice</b> — menu (Elimina punto)</li>
+                  <li><b>Click su un segmento</b> (chiuso) — inserisci punto</li>
+                  <li><b>Tasto destro su un segmento</b> (chiuso) — imposta start</li>
+                  <li><b>Esc</b> — rimuovi ultimo punto</li>
+                  <li><b>Rotellina</b> — zoom</li>
+                  <li><b>Space + drag</b> / rotellina premuta — pan</li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <>
+              <h2>stage2_spline</h2>
+              <pre>
+                {JSON.stringify(
+                  {
+                    controlPoints: spline.controlPoints,
+                    resampledArcLength: {
+                      totalLength: Math.round(resampled.totalLength * 10) / 10,
+                      sampleCount: resampled.sampleCount,
+                      samples: `[${resampled.sampleCount} × {t, s, x, y}]`,
+                    },
+                  },
+                  null,
+                  2
+                )}
+              </pre>
+              <div className="hints">
+                <h3>Comandi</h3>
+                <ul>
+                  <li><b>Drag su un control point</b> — sposta</li>
+                  <li><b>Click sulla curva</b> — inserisci control point</li>
+                  <li><b>Tasto destro su un CP</b> — menu (Elimina)</li>
+                  <li><b>Rotellina</b> — zoom</li>
+                  <li><b>Space + drag</b> / rotellina premuta — pan</li>
+                </ul>
+              </div>
+            </>
+          )}
         </aside>
       </main>
 
       <footer className="statusbar">
-        <span>
-          Punti: <b>{polygon.points.length}</b>
-        </span>
-        <span>
-          Segmenti: <b>{segments.length}</b>
-        </span>
-        <span>
-          Lunghezza {polygon.closed ? 'totale' : 'attuale'}:{' '}
-          <b>{totalLen.toFixed(1)} m</b>
-        </span>
-        {conflicts.length > 0 && (
-          <span className="err">⚠ {conflicts.length} intersezioni</span>
-        )}
-        {polygon.closed &&
-          (polygon.startSegment != null ? (
-            startTooShort ? (
-              <span className="err">
-                🏁 start troppo corto: {startSegLength.toFixed(0)} m &lt;{' '}
-                {minStartLength} m — allunga il rettilineo o scegline un altro
-              </span>
-            ) : (
-              <span className="ok">
-                🏁 start: segmento {polygon.startSegment + 1} (
-                {startSegLength.toFixed(0)} m) ·{' '}
-                {polygon.direction === 'cw' ? 'orario ⟳' : 'antiorario ⟲'}
-              </span>
-            )
-          ) : (
-            <span className="warn">
-              🏁 imposta lo start — tasto destro su un segmento ≥ {minStartLength} m
+        {phase === 1 ? (
+          <>
+            <span>
+              Punti: <b>{polygon.points.length}</b>
             </span>
-          ))}
-        <span className={polygon.closed ? 'ok' : 'dim'}>
-          {polygon.closed ? '● circuito chiuso' : '○ in disegno'}
-        </span>
+            <span>
+              Segmenti: <b>{segments.length}</b>
+            </span>
+            <span>
+              Lunghezza {polygon.closed ? 'totale' : 'attuale'}:{' '}
+              <b>{totalLen.toFixed(1)} m</b>
+            </span>
+            {conflicts.length > 0 && (
+              <span className="err">⚠ {conflicts.length} intersezioni</span>
+            )}
+            {polygon.closed &&
+              (polygon.startSegment != null ? (
+                startTooShort ? (
+                  <span className="err">
+                    🏁 start troppo corto: {startSegLength.toFixed(0)} m &lt;{' '}
+                    {minStartLength} m — allunga il rettilineo o scegline un altro
+                  </span>
+                ) : (
+                  <span className="ok">
+                    🏁 start: segmento {polygon.startSegment + 1} (
+                    {startSegLength.toFixed(0)} m) ·{' '}
+                    {polygon.direction === 'cw' ? 'orario ⟳' : 'antiorario ⟲'}
+                  </span>
+                )
+              ) : (
+                <span className="warn">
+                  🏁 imposta lo start — tasto destro su un segmento ≥{' '}
+                  {minStartLength} m
+                </span>
+              ))}
+            <span className={polygon.closed ? 'ok' : 'dim'}>
+              {polygon.closed ? '● circuito chiuso' : '○ in disegno'}
+            </span>
+          </>
+        ) : (
+          <>
+            <span>
+              Control point: <b>{spline.controlPoints.length}</b>
+            </span>
+            <span>
+              Lunghezza tracciato: <b>{resampled.totalLength.toFixed(1)} m</b>
+            </span>
+            <span>
+              Sample arc-length: <b>{resampled.sampleCount}</b>
+            </span>
+            <span className="ok">
+              🏁 s = 0 sullo start ·{' '}
+              {polygon.direction === 'cw' ? 'orario ⟳' : 'antiorario ⟲'}
+            </span>
+            <span className="dim">● spline chiusa C1</span>
+          </>
+        )}
       </footer>
     </div>
   );
