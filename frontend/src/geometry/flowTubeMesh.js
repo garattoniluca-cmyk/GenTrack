@@ -154,7 +154,21 @@ export function buildFlowTubeMesh(samples, z, rollDeg, section, { wallHeight = W
     upN[i] = U;
     leftN[i] = L;
 
-    const at = (d) => [P[i][0] + L[0] * d, P[i][1] + L[1] * d, P[i][2] + L[2] * d];
+    // PERNO SUL BORDO BASSO (D-026 rev.2): il roll non ruota attorno alla
+    // mezzeria (che affonderebbe il lato interno sotto quota) ma attorno al
+    // bordo esterno del lato che scende: quel bordo resta ESATTAMENTE alla
+    // quota nominale z[i], tutto il resto si alza. Come le sopraelevate
+    // reali. lift è C1 lungo s: |sin(roll)| ha kink solo dove roll tocca 0,
+    // cioè agli estremi delle rampe smoothstep dove roll' = 0.
+    const edgeDropL = dGrassL * L[1]; // Δy del bordo erba SX
+    const edgeDropR = dGrassR * L[1]; // Δy del bordo erba DX
+    const lift = Math.max(0, -Math.min(edgeDropL, edgeDropR));
+
+    const at = (d) => [
+      P[i][0] + L[0] * d,
+      P[i][1] + L[1] * d + lift,
+      P[i][2] + L[2] * d,
+    ];
     rGrassLOut[i] = at(dGrassL);
     rLineLOut[i] = at(w);
     rLineLIn[i] = at(w - lw);

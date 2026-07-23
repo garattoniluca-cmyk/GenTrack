@@ -342,6 +342,15 @@ pendenza max 0.29% (spigolo vero ~10%).
 - **Validazione (non correzione)**: curva con R minimo < semi-larghezza
   tubo → warning rosso (bordo interno auto-intersecante), si allargano i
   bracci in Fase 2.
+- **Rev. 2 (2026-07-23, bug segnalato dall'utente)**: il roll NON ruota
+  attorno alla mezzeria — su pista piatta affondava il lato interno sotto
+  quota (−6.8 m a 20° su tubo da 28 m) deformando i transitori con
+  dislivelli. Ora **perno sul bordo BASSO**: il bordo del lato che scende
+  resta ESATTAMENTE alla quota nominale z(s), tutto il resto si alza —
+  come le sopraelevate reali. Il lift (=|Δy bordo|) è C1 lungo s perché
+  roll tocca 0 solo agli estremi delle rampe smoothstep, dove roll'=0.
+  Test: mai sotto quota nominale, bordo basso inchiodato, continuità
+  verticale sulle rampe.
 
 <!-- Template nuova decisione:
 ### D-0XX — Titolo

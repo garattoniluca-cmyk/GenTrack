@@ -95,6 +95,47 @@ describe('buildFlowTubeMesh — struttura', () => {
 });
 
 describe('buildFlowTubeMesh — banking e quota', () => {
+  it('PERNO SUL BORDO BASSO: la pista non scende MAI sotto la quota nominale', () => {
+    // pista piatta (z=0) con roll variabile: nessun vertice della
+    // carreggiata/erba deve andare sotto y=0 (il vecchio perno in mezzeria
+    // affondava il lato interno di ~6.8 m a 20°)
+    const roll = Array.from({ length: N }, (_, i) => 20 * Math.sin((2 * Math.PI * i) / N));
+    const m = buildFlowTubeMesh(path.samples, zFlat, roll, SECTION);
+    for (const band of [m.bands.asphalt, m.bands.lines, m.bands.grass]) {
+      for (let k = 1; k < band.positions.length; k += 3) {
+        expect(band.positions[k]).toBeGreaterThanOrEqual(-1e-9);
+      }
+    }
+  });
+
+  it('il bordo BASSO resta esattamente a quota nominale (perno)', () => {
+    const roll10 = new Array(N).fill(10); // sinistra alzata → bordo basso = erba DX
+    const m = buildFlowTubeMesh(path.samples, zFlat, roll10, SECTION);
+    const g = m.bands.grass;
+    const half = g.positions.length / 2;
+    for (let i = 0; i < N; i += 50) {
+      const rightOuterY = g.positions[half + i * 6 + 4]; // erba DX, rail esterno
+      expect(Math.abs(rightOuterY)).toBeLessThan(1e-9); // inchiodato a z=0
+    }
+  });
+
+  it('CONTINUITÀ del lift lungo le rampe: nessun salto verticale', () => {
+    // rampa smoothstep 0→20→0 come nei transitori reali
+    const roll = Array.from({ length: N }, (_, i) => {
+      const s = i / N;
+      const t = Math.max(0, Math.min(1, (s - 0.2) / 0.1));
+      const u = Math.max(0, Math.min(1, (0.6 - s) / 0.1));
+      return 20 * (t * t * (3 - 2 * t)) * (u * u * (3 - 2 * u));
+    });
+    const m = buildFlowTubeMesh(path.samples, zFlat, roll, SECTION);
+    const a = m.bands.asphalt;
+    // Δy tra anelli consecutivi del bordo sinistro dell'asfalto: piccolo e regolare
+    for (let i = 0; i < N - 1; i++) {
+      const dy = Math.abs(a.positions[(i + 1) * 6 + 1] - a.positions[i * 6 + 1]);
+      expect(dy).toBeLessThan(0.35); // anelli ~5 m: un salto vero sarebbe metri
+    }
+  });
+
   it('roll positivo = lato SINISTRO alzato', () => {
     const roll10 = new Array(N).fill(10);
     const m = buildFlowTubeMesh(path.samples, zFlat, roll10, SECTION);
