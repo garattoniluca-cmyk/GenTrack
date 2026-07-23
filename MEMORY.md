@@ -3,10 +3,11 @@
 > Snapshot dello stato corrente. Aggiornare a ogni sessione di lavoro.
 > Ultimo aggiornamento: **2026-07-23**
 
-## Stato: FASE 3A IMPLEMENTATA (in validazione utente)
+## Stato: FASE 3B IMPLEMENTATA (in validazione utente)
 
 Fase 1 (poligonale) + Fase 2 (stondature) + Fase 3A (sezione/banking/
-altimetria) su http://localhost:5173. **84 test unitari verdi**.
+altimetria) + Fase 3B (tubo di flusso 3D con fly-cam) su
+http://localhost:5173. **112 test unitari verdi**.
 
 ## Fatto
 
@@ -145,7 +146,22 @@ altimetria) su http://localhost:5173. **84 test unitari verdi**.
       sostituito da `flatRadius`. Test riscritti (coerenza spaziale: paralleli
       a 25 m → Δz<8 m; z=0 esatto sul rettilineo; peso 0.5 esatto a metà
       rampa). 100 verdi. Live: z≤2e-11 su 297 sample, Δpendenza max 0.29%.
-- [ ] Fase 3A: **validazione utente** in corso.
+- [x] 2026-07-23 — **Fase 3B implementata** (scope approvato; D-026):
+      - three/@react-three/fiber/drei installati
+      - `flowTubeMesh.js` (puro, no three): sezione a 7 fasce con confini
+        bit-identici, muri verticali 2 m, frame orizzontale+roll utente
+        (deviazione motivata da parallel transport), normali analitiche,
+        UV in metri, chiusura modulare — 12 test (tot **112 verdi**)
+      - `buildBankingRoll`: bank positivo = esterno curva alzato (scelta
+        utente); roll = angleDeg·outerSign
+      - viewer3d: Scene3D (luci, fog, piano riferimento), TrackMesh3D
+        (BufferGeometry + materiali), FlyCamera custom (drag sguardo con Y
+        invertibile, frecce/WASD, Shift boost, rotellina velocità)
+      - Tab "3B · 3D", toggle Y invertita + Wireframe, statistiche mesh,
+        validazione curve più strette del tubo (warning, non correzione)
+      - Verificato con screenshot: tubo corretto, 13.776 triangoli @984
+        anelli, zero errori console
+- [ ] Fase 3B: **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello

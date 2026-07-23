@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import GridCanvas from './components/editor2d/GridCanvas.jsx';
 import SplineEditor from './components/editor2d/SplineEditor.jsx';
 import FlowTubeEditor from './components/editor2d/FlowTubeEditor.jsx';
+import Scene3D from './components/viewer3d/Scene3D.jsx';
 import BankingProfile from './components/panels/BankingProfile.jsx';
 import ElevationProfile from './components/panels/ElevationProfile.jsx';
 import {
@@ -19,7 +20,8 @@ import {
 } from './geometry/polygon.js';
 import { resampleFilletPath } from './geometry/spline.js';
 import { buildElevation } from './geometry/trackNoise.js';
-import { buildBankingProfile, bankingConflicts } from './geometry/banking.js';
+import { buildBankingProfile, buildBankingRoll, bankingConflicts } from './geometry/banking.js';
+import { buildFlowTubeMesh } from './geometry/flowTubeMesh.js';
 
 export default function App() {
   const phase = useTrackStore((s) => s.phase);
@@ -134,6 +136,34 @@ export default function App() {
     [resampled.totalLength, resampled.corners, flowTube.cornerBanking]
   );
 
+  // Fase 3B: mesh 3D (solo quando serve)
+  const view3d = useTrackStore((s) => s.view3d);
+  const setView3d = useTrackStore((s) => s.setView3d);
+  const mesh3d = useMemo(() => {
+    if (phase !== 4 || !elevation || resampled.sampleCount < 3) return null;
+    const roll = buildBankingRoll(
+      resampled.sampleCount,
+      resampled.totalLength,
+      resampled.corners,
+      flowTube.cornerBanking
+    );
+    return buildFlowTubeMesh(resampled.samples, elevation.z, roll, flowTube.section);
+  }, [phase, resampled, elevation, flowTube.cornerBanking, flowTube.section]);
+
+  // validazione 3B: il bordo interno di una curva troppo stretta per il tubo
+  // si auto-intersecherebbe (da segnalare, mai correggere)
+  const tightCorners = useMemo(() => {
+    return resampled.corners
+      .filter((c) => !c.skip && c.minR != null)
+      .filter((c) => {
+        const halfTube =
+          flowTube.section.trackWidth / 2 +
+          Math.max(flowTube.section.grassLeft, flowTube.section.grassRight);
+        return c.minR < halfTube;
+      })
+      .map((c) => ({ origIndex: c.origIndex, minR: c.minR }));
+  }, [resampled.corners, flowTube.section]);
+
   const startSegLength =
     polygon.startSegment != null
       ? (segments.find((s) => s.index === polygon.startSegment)?.length ?? 0)
@@ -222,7 +252,40 @@ export default function App() {
           >
             3A · Tubo 2D
           </button>
+          <button
+            className={phase === 4 ? 'active' : ''}
+            disabled={!phase2Ready}
+            title={
+              phase2Ready
+                ? 'Scena 3D del tubo di flusso'
+                : 'Chiudi il poligono e imposta lo start per accedere'
+            }
+            onClick={() => goDerivedPhase(4)}
+          >
+            3B · 3D
+          </button>
         </div>
+
+        {phase === 4 && (
+          <>
+            <label className="check-row" title="Inverte l'asse Y del mouse">
+              <input
+                type="checkbox"
+                checked={view3d.invertY}
+                onChange={(e) => setView3d({ invertY: e.target.checked })}
+              />
+              Y invertita
+            </label>
+            <label className="check-row" title="Ispezione dei triangoli">
+              <input
+                type="checkbox"
+                checked={view3d.wireframe}
+                onChange={(e) => setView3d({ wireframe: e.target.checked })}
+              />
+              Wireframe
+            </label>
+          </>
+        )}
 
         {phase === 2 && (
           <label title="Braccio di default delle stondature (distanza dei punti di tangenza dal vertice)">
@@ -322,6 +385,14 @@ export default function App() {
           <GridCanvas />
         ) : phase === 2 ? (
           <SplineEditor />
+        ) : phase === 4 ? (
+          <Scene3D
+            mesh={mesh3d}
+            resampled={resampled}
+            elevation={elevation}
+            invertY={view3d.invertY}
+            wireframe={view3d.wireframe}
+          />
         ) : (
           <div className="canvas-with-charts">
             <FlowTubeEditor resampled={resampled} elevation={elevation} />
@@ -338,7 +409,50 @@ export default function App() {
         )}
 
         <aside className="side-panel">
-          {phase === 3 ? (
+          {phase === 4 ? (
+            <>
+              <h2>fase 3B — tubo di flusso 3D</h2>
+              {mesh3d && (
+                <div className="param-group">
+                  <h3>Mesh</h3>
+                  <div className="stats-grid">
+                    <span>Triangoli</span>
+                    <b>{mesh3d.stats.triangles.toLocaleString('it-IT')}</b>
+                    <span>Vertici</span>
+                    <b>{mesh3d.stats.vertices.toLocaleString('it-IT')}</b>
+                    <span>Anelli</span>
+                    <b>{resampled.sampleCount}</b>
+                    <span>Muri</span>
+                    <b>2 m verticali</b>
+                  </div>
+                </div>
+              )}
+              {tightCorners.length > 0 && (
+                <div className="param-group">
+                  <h3 className="err">⚠ Curve troppo strette per il tubo</h3>
+                  <div className="stats-grid">
+                    {tightCorners.map((c) => (
+                      <span key={c.origIndex} className="err" style={{ gridColumn: '1 / -1' }}>
+                        vertice {c.origIndex + 1}: R~{Math.round(c.minR)} m &lt;{' '}
+                        semi-larghezza tubo — il bordo interno si auto-interseca:
+                        allarga i bracci in Fase 2
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="hints">
+                <h3>Comandi</h3>
+                <ul>
+                  <li><b>Drag col mouse</b> — guarda intorno</li>
+                  <li><b>Frecce / WASD</b> — vola (↑ avanti, ← → strafe)</li>
+                  <li><b>Shift</b> — boost ×4 · <b>rotellina</b> — velocità</li>
+                  <li><b>Y invertita / Wireframe</b> — toggle in toolbar</li>
+                  <li>Bank e quota arrivano dalla Fase 3A: modifica lì, rientra qui</li>
+                </ul>
+              </div>
+            </>
+          ) : phase === 3 ? (
             <>
               <h2>stage3_flowTube</h2>
 
@@ -507,7 +621,30 @@ export default function App() {
       )}
 
       <footer className="statusbar">
-        {phase === 3 ? (
+        {phase === 4 ? (
+          <>
+            <span>
+              Triangoli: <b>{mesh3d ? mesh3d.stats.triangles.toLocaleString('it-IT') : '—'}</b>
+            </span>
+            <span>
+              Lunghezza: <b>{resampled.totalLength.toFixed(0)} m</b>
+            </span>
+            {elevation && (
+              <span>
+                Dislivello: <b>{(elevation.stats.maxZ - elevation.stats.minZ).toFixed(1)} m</b>
+              </span>
+            )}
+            {bankConflicts.length > 0 && (
+              <span className="err">⚠ rampe bank in conflitto — sistemale in 3A</span>
+            )}
+            {tightCorners.length > 0 && (
+              <span className="err">
+                ⚠ {tightCorners.length} curve più strette del tubo — vedi pannello
+              </span>
+            )}
+            <span className="dim">● 3B: mesh dal vivo dai dati 3A</span>
+          </>
+        ) : phase === 3 ? (
           <>
             <span>
               Lunghezza: <b>{resampled.totalLength.toFixed(0)} m</b>

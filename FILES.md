@@ -40,7 +40,8 @@
 | `widthChannel.js` | Canale larghezza (step/lerp/smoothstep) | 3 | ⏳ |
 | `bankingChannel.js` | Canale banking | 3 | ⏳ |
 | `elevationChannel.js` | Canale altitudine | 3 | ⏳ |
-| `flowTubeMesh.js` | Estrusione finale: spline+canali → BufferGeometry | 3 | ⏳ |
+| `flowTubeMesh.js` | Estrusione tubo: 7 fasce con confini bit-identici, muri verticali 2 m, frame orizzontale+roll, array indicizzati puri (D-026) | 3B | 🧪 |
+| `flowTubeMesh.test.js` | 12 test: aree>0, no NaN, rail condivisi, muri, bank end-to-end | 3B | ✅ |
 | `runoffEnvelope.js` | Inviluppo tangenti-velocità per vie di fuga | 5 | ⏳ |
 | `runoffPatch.js` | Triangolazione patch vie di fuga (earcut) | 5 | ⏳ |
 | `chicaneTemplates.js` | Libreria elementi artificiali parametrici | 4 | ⏳ |
@@ -59,8 +60,9 @@
 | `editor2d/FlowTubeEditor.jsx` | Fase 3A: footprint tubo (erba/asfalto/righe), mezzeria termica per quota | 3A | ✅ |
 | `panels/BankingEditor.jsx` | Editor grafico canale banking (SVG, keyframe interattivi) | 3A | ✅ |
 | `panels/ElevationProfile.jsx` | Profilo altimetrico s→z colorato per pendenza | 3A | ✅ |
-| `viewer3d/Scene.jsx` | Scena r3f | 7 | ⏳ |
-| `viewer3d/TrackMesh.jsx` | Render tubo di flusso (multi-material/vertex colors) | 7 | ⏳ |
+| `viewer3d/Scene3D.jsx` | Scena r3f: luci, fog, piano riferimento, spawn su start | 3B | ✅ |
+| `viewer3d/TrackMesh3D.jsx` | BufferGeometry dalle bande + materiali (asfalto/righe/erba/muri) | 3B | ✅ |
+| `viewer3d/FlyCamera.jsx` | Fly-cam custom: drag sguardo (Y invertibile), frecce/WASD, boost | 3B | ✅ |
 | `viewer3d/TerrainMesh.jsx` | Render terreno (shading altezza/pendenza) | 7 | ⏳ |
 | `viewer3d/RunoffOverlay.jsx` | Overlay vie di fuga (generato vs override) | 7 | ⏳ |
 | `panels/SectionProfilePanel.jsx` | UI profili sezione | 3 | ⏳ |

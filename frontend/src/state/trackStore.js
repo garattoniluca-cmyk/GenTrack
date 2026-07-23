@@ -83,11 +83,18 @@ export const useTrackStore = create(
       stage2Spline: initialSpline,
       stage3FlowTube: initialFlowTube,
 
-      /** Fase attiva nell'UI (1 = poligonale, 2 = spline, 3 = tubo 2D). */
+      /** Fase attiva nell'UI (1 = poligonale, 2 = spline, 3 = tubo 2D, 4 = 3D). */
       phase: 1,
       setPhase: (p) => {
-        if (p !== 1 && p !== 2 && p !== 3) return;
+        if (![1, 2, 3, 4].includes(p)) return;
         set({ phase: p });
+      },
+
+      /** Impostazioni vista 3D (non tracciate dalla history). */
+      view3d: { invertY: false, wireframe: false },
+      setView3d: (patch) => {
+        const { view3d } = get();
+        set({ view3d: { ...view3d, ...patch } });
       },
 
       /** Distanza minima (m) di un punto nuovo da punti/segmenti esistenti. */

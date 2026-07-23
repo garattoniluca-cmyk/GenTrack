@@ -32,11 +32,21 @@ function buildBankModel(totalLength, corners, cornerBanking) {
     )
     .map((c) => {
       const bk = cornerBanking[c.origIndex];
+      const A = Math.max(-MAX_BANK_DEG, Math.min(MAX_BANK_DEG, bk.angleDeg));
+      // lato esterno della curva: cross(travel_in, travel_out).
+      // >0 = svolta a sinistra → esterno a DESTRA (-1); <0 → esterno a sinistra (+1)
+      const cross = c.d1 && c.d2 ? -c.d1.x * c.d2.y + c.d1.y * c.d2.x : 0;
+      const outerSign = cross > 0 ? -1 : 1;
       return {
         origIndex: c.origIndex,
         sStart: c.sStart,
         sEnd: c.sEnd,
-        A: Math.max(-MAX_BANK_DEG, Math.min(MAX_BANK_DEG, bk.angleDeg)),
+        A,
+        // roll = rotazione della sezione (positivo = lato SINISTRO alzato).
+        // Convenzione utente (D-026): bank positivo = ESTERNO curva alzato
+        // → roll = A · outerSign
+        Aroll: A * outerSign,
+        outerSign,
         li: Math.max(0, bk.rampBefore ?? DEFAULT_BANK_RAMP) / totalLength,
         lo: Math.max(0, bk.rampAfter ?? DEFAULT_BANK_RAMP) / totalLength,
       };
@@ -74,23 +84,17 @@ export function bankingConflicts(totalLength, corners, cornerBanking) {
     }));
 }
 
-/**
- * Profilo del banking su sampleCount punti equidistanti (gradi per sample).
- * corners: da resampleFilletPath (con sStart/sEnd).
- * cornerBanking: { [origIndex]: {angleDeg, rampBefore, rampAfter} } (metri).
- */
-export function buildBankingProfile(sampleCount, totalLength, corners, cornerBanking) {
+/** Valutatore condiviso del profilo a tratti (valueKey: 'A' | 'Aroll'). */
+function buildProfileFromModel(sampleCount, model, valueKey) {
   const out = new Array(sampleCount).fill(0);
-  if (!(totalLength > 0) || sampleCount < 2) return out;
-
-  const { banked, gaps } = buildBankModel(totalLength, corners, cornerBanking);
+  const { banked, gaps } = model;
   if (banked.length === 0) return out;
 
   const evalAt = (s) => {
     // dentro una curva? (le stondature non attraversano s=0: il path parte
     // dalla metà del rettilineo di start)
     for (const c of banked) {
-      if (s >= c.sStart && s <= c.sEnd) return c.A;
+      if (s >= c.sStart && s <= c.sEnd) return c[valueKey];
     }
     // in quale gap? (distanza periodica dalla fine della curva precedente)
     for (const g of gaps) {
@@ -102,11 +106,11 @@ export function buildBankingProfile(sampleCount, totalLength, corners, cornerBan
         let vA = 0;
         let vB = 0;
         if (g.A.lo > 0 && d <= g.A.lo) {
-          vA = g.A.A * (1 - smoothstep(d / g.A.lo));
+          vA = g.A[valueKey] * (1 - smoothstep(d / g.A.lo));
         }
         const dToB = g.gapLen - d;
         if (g.B.li > 0 && dToB <= g.B.li) {
-          vB = g.B.A * (1 - smoothstep(dToB / g.B.li));
+          vB = g.B[valueKey] * (1 - smoothstep(dToB / g.B.li));
         }
         return Math.abs(vA) >= Math.abs(vB) ? vA : vB;
       }
@@ -118,6 +122,30 @@ export function buildBankingProfile(sampleCount, totalLength, corners, cornerBan
     out[i] = evalAt(i / sampleCount);
   }
   return out;
+}
+
+/**
+ * Profilo del banking su sampleCount punti equidistanti (gradi per sample,
+ * VALORI UTENTE senza segno di lato — per il grafico).
+ * corners: da resampleFilletPath (con sStart/sEnd).
+ * cornerBanking: { [origIndex]: {angleDeg, rampBefore, rampAfter} } (metri).
+ */
+export function buildBankingProfile(sampleCount, totalLength, corners, cornerBanking) {
+  if (!(totalLength > 0) || sampleCount < 2) return new Array(sampleCount).fill(0);
+  const model = buildBankModel(totalLength, corners, cornerBanking);
+  return buildProfileFromModel(sampleCount, model, 'A');
+}
+
+/**
+ * Profilo del ROLL su sampleCount punti (gradi per sample, col SEGNO DI LATO
+ * risolto: positivo = lato sinistro alzato). Convenzione D-026: bank positivo
+ * = esterno curva alzato → roll = angleDeg · outerSign della curva.
+ * È il profilo da usare per l'estrusione 3D (Fase 3B).
+ */
+export function buildBankingRoll(sampleCount, totalLength, corners, cornerBanking) {
+  if (!(totalLength > 0) || sampleCount < 2) return new Array(sampleCount).fill(0);
+  const model = buildBankModel(totalLength, corners, cornerBanking);
+  return buildProfileFromModel(sampleCount, model, 'Aroll');
 }
 
 /**

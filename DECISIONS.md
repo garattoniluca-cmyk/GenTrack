@@ -312,6 +312,37 @@ il futuro terreno può usare LO STESSO campo, coerenza totale.
 **Verificato live**: 297 sample sul rettilineo con z ≤ 2e-11; salto di
 pendenza max 0.29% (spigolo vero ~10%).
 
+### D-026 — Fase 3B: frame "orizzontale + roll utente" e mesh da simulatore
+**Data**: 2026-07-23 (scope approvato dall'utente)
+**Decisione**:
+- **Frame per anello**: T = tangente 3D; laterale = orizzontale ⊥ T
+  (UP × T); roll = SOLO l'angolo di bank utente ruotato attorno a T
+  (Rodrigues). DEVIAZIONE MOTIVATA da D-003 (parallel transport): per una
+  strada il laterale DEVE essere orizzontale a bank 0 (come le strade
+  vere); niente flip possibili (pendenza ≤ 10% ⇒ T mai verticale); niente
+  twist accumulato né mismatch di chiusura al traguardo; D-002 rafforzata
+  (il banking non può che essere input utente).
+- **Segno bank** (scelta utente): positivo = ESTERNO curva alzato
+  (appoggio). Il roll per l'estrusione = angleDeg · outerSign della curva
+  (`buildBankingRoll`); il grafico continua a mostrare i valori utente.
+- **Sezione**: muroSX|erbaSX|riga|asfalto|riga|erbaDX|muroDX. Confini
+  calcolati una volta per anello e CONDIVISI (bit-identici) tra fasce
+  adiacenti → zero buchi/T-junction. Muri VERTICALI (gravità) alti 2 m sui
+  bordi esterni; erba nel piano bankato. Chiusura con indici modulari
+  (nessuna cucitura). Normali analitiche, UV in metri, winding CCW.
+- **Anelli = sample della 3A** (stessa z[i], stesso roll[i]): coerenza
+  totale 2D↔3D.
+- **Modulo puro** `flowTubeMesh.js` (niente three) testato: aree > 0,
+  niente NaN, rail condivisi bit-identici, muri verticali esatti,
+  convenzione bank end-to-end. three/r3f/drei installati per il rendering.
+- **Coordinate three**: X = mondo.x, Y = quota, Z = −mondo.y (Y-up).
+- **Fly-cam custom**: drag = sguardo (Y invertibile da toolbar), frecce/
+  WASD = volo, Shift boost, rotellina velocità. Toggle wireframe per
+  ispezione triangoli.
+- **Validazione (non correzione)**: curva con R minimo < semi-larghezza
+  tubo → warning rosso (bordo interno auto-intersecante), si allargano i
+  bracci in Fase 2.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD
