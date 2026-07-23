@@ -272,13 +272,17 @@ sul marker al centro di ogni stondatura → popup con angolo (±30°) e rampe
 di ritorno a zero prima/dopo (m, default 100). Bank COSTANTE lungo
 l'estensione s della curva (registrata da resampleFilletPath), rampe
 smoothstep (derivata nulla agli estremi → profilo C1).
-**Rampe che si intersecano → PONTE DIRETTO** (scelta utente 2026-07-23,
-sostituisce la somma iniziale): se la rampa di uscita di una curva si
-sovrappone a quella di ingresso della successiva, il bank transita
-direttamente da A° a B° con una smoothstep sull'intero gap — non torna a
-zero, mai sopra il valore più alto né sotto il più basso, sempre C1.
-Caso limite: rampe che coprono tutto il giro → bank costante ovunque.
-Gli indicatori sulla mappa fanno incontrare i tratteggi a metà gap.
+**Rampe che si intersecano → SOLO VALIDAZIONE, NESSUN AUTOMATISMO**
+(rev. 2, 2026-07-23 — il "ponte diretto" provato in giornata è stato
+BOCCIATO dall'utente: "non mi dà il controllo, non voglio algoritmi che
+cambiano il bank dove non l'ho impostato"). Regola finale: le rampe sono
+sempre indipendenti e il bank è SOLO quello impostato; se
+rampaDopo(A)+rampaPrima(B) > gap tra le stondature, lo stato è INVALIDO e
+viene segnalato senza correzioni automatiche: rampe rosse sulla mappa,
+warning nel popup (con eccesso da ridurre e gap disponibile), errore in
+statusbar. Nello stato invalido il profilo mostra il contributo maggiore
+in modulo (definito ma non "corretto" — il rosso dice di sistemare).
+`bankingConflicts()` espone i conflitti {from, to, gapM, rampsM, excessM}.
 Il grafico banking è SOLA VISUALIZZAZIONE
 del profilo risultante. Sostituisce il canale a keyframe liberi (UX bocciata:
 scollegata dalle curve reali). Marker giallo + etichetta gradi = curva con

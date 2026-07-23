@@ -118,15 +118,15 @@ altimetria) su http://localhost:5173. **84 test unitari verdi**.
       pieno, tratteggiata = transitori in/out; gialla = bank positivo, ciano =
       negativo. `bankingIndicators()` in banking.js con lato esterno dal
       cross product delle direzioni di svolta (+3 test, tot **94 verdi**).
-- [x] 2026-07-23 — **Ponte diretto tra rampe di bank sovrapposte** (D-024
-      aggiornata, opzione scelta dall'utente): transizione diretta A°→B°
-      smoothstep sul gap, mai a zero, niente gobbe (la somma poteva superare
-      i valori impostati), C1; caso limite giro intero → bank costante.
-      Verificato live: tra +12° e +4° il profilo resta in [4,12].
-      Modello a tratti in banking.js (buildBankModel); tratteggi indicatori
-      si incontrano a metà gap. 100 test verdi.
-      NOTA collaudo: per testare ho portato la rampa out della curva 2
-      dell'utente da 200 a 300 m (undo disponibile).
+- [x] 2026-07-23 — Rampe bank sovrapposte, iterazione UX: prima somma, poi
+      "ponte diretto" (implementato e BOCCIATO dall'utente: toglie controllo)
+      → **finale: SOLO VALIDAZIONE** (D-024 rev.2). Rampe sempre indipendenti,
+      bank solo dove impostato; conflitto = stato invalido segnalato: rampe
+      rosse in mappa, warning nel popup (eccesso + gap disponibile), errore
+      in statusbar ("eccesso N m — riduci le rampe"). bankingConflicts().
+      Verificato live: eccesso 73 m calcolato esatto. 100 test verdi.
+      LEZIONE: l'utente vuole controllo esplicito, mai correzioni automatiche
+      dei suoi input — validare e segnalare, non aggiustare.
 - [ ] Fase 3A: **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).

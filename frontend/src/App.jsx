@@ -19,7 +19,7 @@ import {
 } from './geometry/polygon.js';
 import { resampleFilletPath } from './geometry/spline.js';
 import { buildElevation } from './geometry/trackNoise.js';
-import { buildBankingProfile } from './geometry/banking.js';
+import { buildBankingProfile, bankingConflicts } from './geometry/banking.js';
 
 export default function App() {
   const phase = useTrackStore((s) => s.phase);
@@ -100,6 +100,11 @@ export default function App() {
         flowTube.cornerBanking
       ),
     [resampled.sampleCount, resampled.totalLength, resampled.corners, flowTube.cornerBanking]
+  );
+  const bankConflicts = useMemo(
+    () =>
+      bankingConflicts(resampled.totalLength, resampled.corners, flowTube.cornerBanking),
+    [resampled.totalLength, resampled.corners, flowTube.cornerBanking]
   );
 
   const startSegLength =
@@ -494,6 +499,15 @@ export default function App() {
                 }
               </b>
             </span>
+            {bankConflicts.length > 0 && (
+              <span className="err">
+                ⚠ rampe bank in conflitto ({bankConflicts.length}):{' '}
+                {bankConflicts
+                  .map((c) => `eccesso ${Math.ceil(c.excessM)} m`)
+                  .join(' · ')}{' '}
+                — riduci le rampe
+              </span>
+            )}
             {elevation && (
               <>
                 <span>

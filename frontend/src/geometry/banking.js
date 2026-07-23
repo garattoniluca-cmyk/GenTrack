@@ -1,15 +1,14 @@
-// banking.js — banking PER CURVA (D-024).
+// banking.js — banking PER CURVA (D-024, rev. 2).
 // Il bank si imposta sulla mappa a livello di curva: angolo COSTANTE lungo
 // l'estensione della stondatura [sStart, sEnd], con RAMPE smoothstep di
 // salita/discesa a zero su distanze configurabili prima e dopo la curva.
 //
-// RAMPE CHE SI INTERSECANO → PONTE DIRETTO (scelta utente, 2026-07-23):
-// se la rampa di uscita di una curva si sovrappone alla rampa di ingresso
-// della successiva, il bank transita DIRETTAMENTE dall'angolo della prima
-// a quello della seconda con una smoothstep sull'intero gap: non torna a
-// zero, non crea gobbe sopra i valori impostati, resta C1 ovunque.
-// Caso limite incluso: un'unica curva con rampe che coprono tutto il giro
-// → bank costante su tutto il tracciato.
+// NESSUN AUTOMATISMO (scelta utente, 2026-07-23): le rampe sono SEMPRE
+// indipendenti e il bank è solo quello impostato dall'utente. Se due rampe
+// si intersecano, lo stato è INVALIDO e va segnalato (bankingConflicts):
+// l'app avverte, l'utente accorcia le rampe. Nello stato invalido il
+// profilo mostra il contributo maggiore in modulo (comportamento definito
+// ma non "corretto": il rosso in UI dice che va sistemato).
 
 export const DEFAULT_BANK_RAMP = 100; // m
 export const MAX_BANK_DEG = 30;
@@ -50,9 +49,29 @@ function buildBankModel(totalLength, corners, cornerBanking) {
     const A = banked[k];
     const B = banked[(k + 1) % n];
     const gapLen = n === 1 ? wrap01(A.sStart - A.sEnd) : wrap01(B.sStart - A.sEnd);
-    gaps.push({ A, B, gapLen, bridged: A.lo + B.li >= gapLen });
+    gaps.push({ A, B, gapLen, overlap: A.lo + B.li > gapLen + 1e-12 });
   }
   return { banked, gaps };
+}
+
+/**
+ * VALIDAZIONE: rampe che si intersecano. Ritorna un conflitto per ogni
+ * coppia di curve le cui rampe non ci stanno nel gap tra le stondature:
+ * { fromIndex, toIndex, gapM, rampsM, excessM } (metri). fromIndex può
+ * coincidere con toIndex (unica curva con rampe più lunghe del giro).
+ */
+export function bankingConflicts(totalLength, corners, cornerBanking) {
+  if (!(totalLength > 0)) return [];
+  const { gaps } = buildBankModel(totalLength, corners, cornerBanking);
+  return gaps
+    .filter((g) => g.overlap)
+    .map((g) => ({
+      fromIndex: g.A.origIndex,
+      toIndex: g.B.origIndex,
+      gapM: g.gapLen * totalLength,
+      rampsM: (g.A.lo + g.B.li) * totalLength,
+      excessM: (g.A.lo + g.B.li - g.gapLen) * totalLength,
+    }));
 }
 
 /**
@@ -77,20 +96,19 @@ export function buildBankingProfile(sampleCount, totalLength, corners, cornerBan
     for (const g of gaps) {
       const d = wrap01(s - g.A.sEnd);
       if (d <= g.gapLen + 1e-12) {
-        if (g.bridged) {
-          // PONTE: transizione diretta A → B sull'intero gap
-          const u = g.gapLen > 1e-12 ? d / g.gapLen : 0;
-          return g.A.A + (g.B.A - g.A.A) * smoothstep(u);
-        }
-        // rampe indipendenti: discesa di A, zero, salita di B
+        // rampe SEMPRE indipendenti: discesa di A, zero, salita di B.
+        // Se si intersecano (stato INVALIDO, segnalato da bankingConflicts)
+        // prevale il contributo maggiore in modulo.
+        let vA = 0;
+        let vB = 0;
         if (g.A.lo > 0 && d <= g.A.lo) {
-          return g.A.A * (1 - smoothstep(d / g.A.lo));
+          vA = g.A.A * (1 - smoothstep(d / g.A.lo));
         }
         const dToB = g.gapLen - d;
         if (g.B.li > 0 && dToB <= g.B.li) {
-          return g.B.A * (1 - smoothstep(dToB / g.B.li));
+          vB = g.B.A * (1 - smoothstep(dToB / g.B.li));
         }
-        return 0;
+        return Math.abs(vA) >= Math.abs(vB) ? vA : vB;
       }
     }
     return 0;
@@ -107,29 +125,20 @@ export function buildBankingProfile(sampleCount, totalLength, corners, cornerBan
  * i range in s di [rampa in | bank pieno | rampa out] e il LATO ESTERNO
  * della curva (quello che il bank alza): +1 = sinistra, -1 = destra nel
  * verso di percorrenza. I range possono sforare [0,1]: il renderer wrappa.
- * Se due rampe sono in PONTE (vedi buildBankingProfile), i tratteggi si
- * incontrano a metà del gap invece di sovrapporsi.
+ * conflictIn/conflictOut: la rampa interseca quella della curva adiacente
+ * (stato invalido, da renderizzare in rosso).
  */
 export function bankingIndicators(corners, cornerBanking, totalLength) {
   if (!(totalLength > 0)) return [];
   const { banked, gaps } = buildBankModel(totalLength, corners, cornerBanking);
   if (banked.length === 0) return [];
 
-  // range di rampa effettivi, con clip a metà gap se in ponte
-  const rampOutEnd = new Map(); // origIndex → s
-  const rampInStart = new Map();
+  const conflictOut = new Set();
+  const conflictIn = new Set();
   for (const g of gaps) {
-    if (g.bridged) {
-      const mid = g.A.sEnd + g.gapLen / 2;
-      rampOutEnd.set(g.A.origIndex, mid);
-      rampInStart.set(g.B.origIndex, mid);
-    } else {
-      if (!rampOutEnd.has(g.A.origIndex)) {
-        rampOutEnd.set(g.A.origIndex, g.A.sEnd + g.A.lo);
-      }
-      if (!rampInStart.has(g.B.origIndex)) {
-        rampInStart.set(g.B.origIndex, g.B.sStart - g.B.li);
-      }
+    if (g.overlap) {
+      conflictOut.add(g.A.origIndex);
+      conflictIn.add(g.B.origIndex);
     }
   }
 
@@ -143,10 +152,12 @@ export function bankingIndicators(corners, cornerBanking, totalLength) {
       origIndex: b.origIndex,
       angleDeg: b.A,
       outerSign,
-      sRampInStart: rampInStart.get(b.origIndex) ?? b.sStart - b.li,
+      sRampInStart: b.sStart - b.li,
       sStart: b.sStart,
       sEnd: b.sEnd,
-      sRampOutEnd: rampOutEnd.get(b.origIndex) ?? b.sEnd + b.lo,
+      sRampOutEnd: b.sEnd + b.lo,
+      conflictIn: conflictIn.has(b.origIndex),
+      conflictOut: conflictOut.has(b.origIndex),
     };
   });
 }

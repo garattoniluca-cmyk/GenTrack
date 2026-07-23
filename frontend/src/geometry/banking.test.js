@@ -1,6 +1,11 @@
 // Test invarianti banking.js — vedi TESTING.md
 import { describe, it, expect } from 'vitest';
-import { buildBankingProfile, bankingIndicators, MAX_BANK_DEG } from './banking.js';
+import {
+  buildBankingProfile,
+  bankingIndicators,
+  bankingConflicts,
+  MAX_BANK_DEG,
+} from './banking.js';
 
 const N = 1000;
 const LEN = 5000; // m → 1 sample ogni 5 m
@@ -75,61 +80,69 @@ describe('buildBankingProfile', () => {
   });
 });
 
-describe('buildBankingProfile — PONTE tra rampe che si intersecano', () => {
+describe('buildBankingProfile + bankingConflicts — NESSUN automatismo', () => {
   // due curve: A [0.30-0.35] e B [0.40-0.45], gap 0.05 (250 m su 5000)
   const two = [
     { origIndex: 1, skip: false, sStart: 0.3, sEnd: 0.35 },
     { origIndex: 2, skip: false, sStart: 0.4, sEnd: 0.45 },
   ];
 
-  it('rampe sovrapposte → transizione DIRETTA A→B senza tornare a zero', () => {
-    // lo(A)=200m=0.04 + li(B)=100m=0.02 = 0.06 > gap 0.05 → ponte
-    const out = buildBankingProfile(N, LEN, two, {
+  it('rampe corte (nessuna sovrapposizione): torna a zero, nessun conflitto', () => {
+    const bk = {
+      1: { angleDeg: 12, rampBefore: 50, rampAfter: 50 }, // 0.01 + 0.01 < 0.05
+      2: { angleDeg: 4, rampBefore: 50, rampAfter: 50 },
+    };
+    const out = buildBankingProfile(N, LEN, two, bk);
+    expect(out[Math.round(0.375 * N)]).toBe(0);
+    expect(bankingConflicts(LEN, two, bk)).toEqual([]);
+  });
+
+  it('rampe che si intersecano: CONFLITTO segnalato con eccesso corretto', () => {
+    const bk = {
+      1: { angleDeg: 12, rampBefore: 100, rampAfter: 200 }, // 200+100=300 > 250
+      2: { angleDeg: 4, rampBefore: 100, rampAfter: 100 },
+    };
+    const conflicts = bankingConflicts(LEN, two, bk);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].fromIndex).toBe(1);
+    expect(conflicts[0].toIndex).toBe(2);
+    expect(conflicts[0].gapM).toBeCloseTo(250, 6);
+    expect(conflicts[0].rampsM).toBeCloseTo(300, 6);
+    expect(conflicts[0].excessM).toBeCloseTo(50, 6);
+  });
+
+  it('nello stato invalido il bank NON viene inventato: mai oltre i valori impostati', () => {
+    const bk = {
       1: { angleDeg: 12, rampBefore: 100, rampAfter: 200 },
       2: { angleDeg: 4, rampBefore: 100, rampAfter: 100 },
-    });
+    };
+    const out = buildBankingProfile(N, LEN, two, bk);
     const at = (s) => out[Math.round(s * N)];
-    expect(at(0.32)).toBeCloseTo(12, 6); // dentro A
-    expect(at(0.42)).toBeCloseTo(4, 6); // dentro B
-    expect(at(0.375)).toBeCloseTo(8, 0.5); // metà gap ≈ (12+4)/2
-    // nel gap: MAI sotto il minimo né sopra il massimo (niente gobbe)
+    expect(at(0.32)).toBeCloseTo(12, 6); // dentro A: solo il SUO valore
+    expect(at(0.42)).toBeCloseTo(4, 6); // dentro B: solo il SUO valore
     for (let s = 0.351; s < 0.399; s += 0.002) {
-      expect(at(s)).toBeGreaterThanOrEqual(4 - 1e-6);
+      // niente somme: mai sopra il massimo impostato
       expect(at(s)).toBeLessThanOrEqual(12 + 1e-6);
+      expect(at(s)).toBeGreaterThanOrEqual(0 - 1e-6);
     }
   });
 
-  it('rampe corte (nessuna sovrapposizione) → torna a zero tra le curve', () => {
-    const out = buildBankingProfile(N, LEN, two, {
-      1: { angleDeg: 12, rampBefore: 50, rampAfter: 50 }, // 0.01 + 0.01 < 0.05
-      2: { angleDeg: 4, rampBefore: 50, rampAfter: 50 },
-    });
-    expect(out[Math.round(0.375 * N)]).toBe(0);
-  });
-
-  it('segni opposti in ponte: crossover morbido che passa per lo zero', () => {
-    const out = buildBankingProfile(N, LEN, two, {
-      1: { angleDeg: 10, rampBefore: 100, rampAfter: 200 },
-      2: { angleDeg: -10, rampBefore: 100, rampAfter: 100 },
-    });
-    expect(out[Math.round(0.375 * N)]).toBeCloseTo(0, 0.6);
-  });
-
-  it('caso limite: rampe che coprono tutto il giro → bank costante ovunque', () => {
+  it('unica curva con rampe più lunghe del giro: conflitto con sé stessa', () => {
     const one = [{ origIndex: 3, skip: false, sStart: 0.4, sEnd: 0.5 }];
-    const out = buildBankingProfile(N, LEN, one, {
-      3: { angleDeg: 7, rampBefore: 3000, rampAfter: 3000 },
-    });
-    expect(out.every((v) => Math.abs(v - 7) < 1e-9)).toBe(true);
+    const bk = { 3: { angleDeg: 7, rampBefore: 3000, rampAfter: 3000 } };
+    const conflicts = bankingConflicts(LEN, one, bk);
+    expect(conflicts).toHaveLength(1);
+    expect(conflicts[0].fromIndex).toBe(3);
+    expect(conflicts[0].toIndex).toBe(3);
   });
 
-  it('CONTINUITÀ anche col ponte: nessun salto tra sample consecutivi', () => {
-    const out = buildBankingProfile(N, LEN, two, {
-      1: { angleDeg: 12, rampBefore: 100, rampAfter: 200 },
+  it('CONTINUITÀ nel caso valido: nessun salto tra sample consecutivi', () => {
+    const bk = {
+      1: { angleDeg: 12, rampBefore: 100, rampAfter: 100 },
       2: { angleDeg: 4, rampBefore: 100, rampAfter: 100 },
-    });
-    // pendenza massima teorica: rampa 12° su 100 m → smoothstep max 1.5·12/0.02
-    // = 900°/unità-s → 0.9°/sample. Un vero salto (discontinuità) sarebbe ≥ 4°.
+    };
+    const out = buildBankingProfile(N, LEN, two, bk);
+    // rampa 12° su 100 m → smoothstep max 1.5·12/0.02 = 0.9°/sample
     for (let i = 0; i < N; i++) {
       expect(Math.abs(out[(i + 1) % N] - out[i])).toBeLessThan(1.0);
     }
@@ -171,7 +184,7 @@ describe('bankingIndicators', () => {
     expect(bankingIndicators([leftTurn], {}, 5000)).toEqual([]);
   });
 
-  it('rampe in ponte: i tratteggi si incontrano a metà gap', () => {
+  it('rampe che si intersecano: flag di conflitto sugli indicatori', () => {
     const A = { origIndex: 1, skip: false, sStart: 0.3, sEnd: 0.35, d1: { x: -1, y: 0 }, d2: { x: 0, y: 1 } };
     const B = { origIndex: 2, skip: false, sStart: 0.4, sEnd: 0.45, d1: { x: 0, y: -1 }, d2: { x: 1, y: 0 } };
     const out = bankingIndicators([A, B], {
@@ -180,7 +193,11 @@ describe('bankingIndicators', () => {
     }, 5000);
     const iA = out.find((i) => i.origIndex === 1);
     const iB = out.find((i) => i.origIndex === 2);
-    expect(iA.sRampOutEnd).toBeCloseTo(0.375, 9); // metà del gap [0.35, 0.40]
-    expect(iB.sRampInStart).toBeCloseTo(0.375, 9);
+    expect(iA.conflictOut).toBe(true); // la sua rampa out interseca
+    expect(iB.conflictIn).toBe(true); // la sua rampa in interseca
+    expect(iA.conflictIn).toBe(false); // il gap sull'altro lato è ampio
+    // i range restano quelli DICHIARATI (nessun clip automatico)
+    expect(iA.sRampOutEnd).toBeCloseTo(0.35 + 0.04, 9);
+    expect(iB.sRampInStart).toBeCloseTo(0.4 - 0.02, 9);
   });
 });

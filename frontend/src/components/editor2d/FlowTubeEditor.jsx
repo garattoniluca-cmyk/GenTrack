@@ -8,7 +8,7 @@ import { useMemo, useState, useEffect } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Arrow, Shape } from 'react-konva';
 import { useTrackStore } from '../../state/trackStore.js';
 import { tubeOutlines } from '../../geometry/offset.js';
-import { bankingIndicators } from '../../geometry/banking.js';
+import { bankingIndicators, bankingConflicts } from '../../geometry/banking.js';
 import { useCanvasView } from './useCanvasView.js';
 import GridLayer from './GridLayer.jsx';
 import { COLORS } from './colors.js';
@@ -87,6 +87,12 @@ export default function FlowTubeEditor({ resampled, elevation }) {
   const bankIndicators = useMemo(
     () => bankingIndicators(resampled.corners, cornerBanking, resampled.totalLength),
     [resampled.corners, cornerBanking, resampled.totalLength]
+  );
+
+  // rampe che si intersecano: stato invalido da segnalare (mai corretto da solo)
+  const bankConflicts = useMemo(
+    () => bankingConflicts(resampled.totalLength, resampled.corners, cornerBanking),
+    [resampled.totalLength, resampled.corners, cornerBanking]
   );
 
   // polyline offset dalla mezzeria per un range di s (wrap periodico)
@@ -230,15 +236,16 @@ export default function FlowTubeEditor({ resampled, elevation }) {
             const rampIn = offsetRangePoints(ind.sRampInStart, ind.sStart, off);
             const full = offsetRangePoints(ind.sStart, ind.sEnd, off);
             const rampOut = offsetRangePoints(ind.sEnd, ind.sRampOutEnd, off);
+            const CONFLICT = '#f85149';
             return (
               <Group key={`ind${ind.origIndex}`}>
                 {rampIn.length >= 4 && (
                   <Line
                     points={rampIn}
-                    stroke={color}
-                    strokeWidth={3 / view.scale}
+                    stroke={ind.conflictIn ? CONFLICT : color}
+                    strokeWidth={(ind.conflictIn ? 4 : 3) / view.scale}
                     dash={[8 / view.scale, 6 / view.scale]}
-                    opacity={0.7}
+                    opacity={ind.conflictIn ? 1 : 0.7}
                     lineCap="round"
                   />
                 )}
@@ -253,10 +260,10 @@ export default function FlowTubeEditor({ resampled, elevation }) {
                 {rampOut.length >= 4 && (
                   <Line
                     points={rampOut}
-                    stroke={color}
-                    strokeWidth={3 / view.scale}
+                    stroke={ind.conflictOut ? CONFLICT : color}
+                    strokeWidth={(ind.conflictOut ? 4 : 3) / view.scale}
                     dash={[8 / view.scale, 6 / view.scale]}
-                    opacity={0.7}
+                    opacity={ind.conflictOut ? 1 : 0.7}
                     lineCap="round"
                   />
                 )}
@@ -393,6 +400,22 @@ export default function FlowTubeEditor({ resampled, elevation }) {
                 onContextMenu={(e) => e.preventDefault()}
               >
                 <div className="bank-popup-title">🏔 Banking della curva</div>
+                {(() => {
+                  const conf = bankConflicts.filter(
+                    (c) =>
+                      c.fromIndex === bankEdit.origIndex ||
+                      c.toIndex === bankEdit.origIndex
+                  );
+                  if (conf.length === 0) return null;
+                  return (
+                    <div className="bank-popup-warn">
+                      ⚠ Rampe in conflitto con la curva adiacente: riduci di
+                      almeno {Math.ceil(Math.max(...conf.map((c) => c.excessM)))} m
+                      (gap disponibile{' '}
+                      {Math.floor(Math.min(...conf.map((c) => c.gapM)))} m)
+                    </div>
+                  );
+                })()}
                 <label className="param-row">
                   Bank (°)
                   <input
