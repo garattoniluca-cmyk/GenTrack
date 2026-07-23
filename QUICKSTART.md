@@ -56,7 +56,8 @@ pytest
 
 ## Checklist setup iniziale (sprint 1 — da spuntare quando fatto)
 
-- [ ] `git init` + .gitignore (node_modules, .venv, data/, dist/)
+- [x] `git init` + .gitignore + repo GitHub collegato
+      (https://github.com/garattoniluca-cmyk/GenTrack, branch `main`)
 - [ ] Scaffold frontend: Vite + React
 - [ ] Dipendenze: zustand, three, @react-three/fiber, @react-three/drei,
       earcut, simplex-noise (+ konva se P-001 → Konva)

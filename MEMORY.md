@@ -12,6 +12,13 @@ progetto (questo sistema di file di memoria + TRACKGEN_BRIEF.md).
 
 - [x] 2026-07-23 — Ricevuto e analizzato TRACKGEN_BRIEF.md (documento di progetto)
 - [x] 2026-07-23 — Creato sistema di file di memoria (CLAUDE.md + 9 file)
+- [x] 2026-07-23 — `git init`, primo commit, repo GitHub creato e collegato:
+      https://github.com/garattoniluca-cmyk/GenTrack (pubblico, branch `main`).
+      GitHub CLI installato e autenticato (account garattoniluca-cmyk).
+      Identità git repo-locale: garattoniluca-cmyk (la globale resta mc12027).
+- [x] 2026-07-23 — Presentata analisi/recap Fase 1 (setup + editor poligonale):
+      **in attesa di approvazione** — l'utente vuole discuterne prima.
+      P-001 (Konva vs canvas) ancora aperta.
 
 ## In corso
 
@@ -39,4 +46,4 @@ progetto (questo sistema di file di memoria + TRACKGEN_BRIEF.md).
 - Il progetto nasce da esperienze passate negative con lo stitching del
   terreno a posteriori — è il motivo del principio "il rumore nasce dal
   bordo" (vedi DECISIONS.md, D-001).
-- Repo non ancora inizializzato come git.
+- Remote GitHub: `origin` → https://github.com/garattoniluca-cmyk/GenTrack
