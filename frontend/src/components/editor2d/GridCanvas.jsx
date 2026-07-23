@@ -60,6 +60,8 @@ export default function GridCanvas() {
   const [cursorWorld, setCursorWorld] = useState(null);
   const [spacePan, setSpacePan] = useState(false);
   const [hoverSeg, setHoverSeg] = useState(null);
+  // menu contestuale (tasto destro): {x, y} in px schermo + indice del punto
+  const [ctxMenu, setCtxMenu] = useState(null);
 
   const polygon = useTrackStore((s) => s.stage1Polygon);
   const addPoint = useTrackStore((s) => s.addPoint);
@@ -116,10 +118,13 @@ export default function GridCanvas() {
     });
   }, [size]);
 
-  // --- tastiera: Esc rimuove ultimo punto, Space attiva pan ---
+  // --- tastiera: Esc chiude il menu o rimuove l'ultimo punto, Space attiva pan ---
   useEffect(() => {
     const down = (e) => {
-      if (e.key === 'Escape') removeLastPoint();
+      if (e.key === 'Escape') {
+        if (ctxMenu) setCtxMenu(null);
+        else removeLastPoint();
+      }
       if (e.code === 'Space') setSpacePan(true);
     };
     const up = (e) => {
@@ -131,7 +136,19 @@ export default function GridCanvas() {
       window.removeEventListener('keydown', down);
       window.removeEventListener('keyup', up);
     };
-  }, [removeLastPoint]);
+  }, [removeLastPoint, ctxMenu]);
+
+  // --- il menu contestuale si chiude su click altrove, wheel o zoom ---
+  useEffect(() => {
+    if (!ctxMenu) return;
+    const close = () => setCtxMenu(null);
+    window.addEventListener('mousedown', close);
+    window.addEventListener('wheel', close, { passive: true });
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('wheel', close);
+    };
+  }, [ctxMenu]);
 
   // --- conversioni schermo ↔ mondo (y-up) ---
   const screenToWorld = useCallback(
@@ -250,12 +267,16 @@ export default function GridCanvas() {
     if (w) insertPointOnSegment(segIndex, w, effGrid);
   };
 
-  // --- tasto destro su un vertice: elimina il punto ---
+  // --- tasto destro su un vertice: apri il menu contestuale ---
   const onVertexContextMenu = (i) => (e) => {
     e.evt.preventDefault();
     e.cancelBubble = true;
-    removePoint(i);
+    const pos = stageRef.current.getPointerPosition();
+    if (pos) setCtxMenu({ x: pos.x, y: pos.y, pointIndex: i });
   };
+
+  // il punto è eliminabile? (un poligono chiuso non scende sotto 3 punti)
+  const canDeletePoint = !(closed && points.length <= 3);
 
   // --- dati derivati per il render ---
   const snappedCursor = cursorWorld && !closed ? snapToGrid(cursorWorld, effGrid) : null;
@@ -572,6 +593,31 @@ export default function GridCanvas() {
       <div className="scalebar" style={{ width: `${scaleBarPx}px` }}>
         <span>{scaleBarLabel}</span>
       </div>
+
+      {/* menu contestuale del tasto destro */}
+      {ctxMenu && (
+        <div
+          className="context-menu"
+          style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+          onContextMenu={(e) => e.preventDefault()}
+        >
+          <button
+            disabled={!canDeletePoint}
+            title={
+              canDeletePoint
+                ? `Elimina il punto ${ctxMenu.pointIndex + 1}`
+                : 'Un poligono chiuso richiede almeno 3 punti'
+            }
+            onClick={() => {
+              removePoint(ctxMenu.pointIndex);
+              setCtxMenu(null);
+            }}
+          >
+            🗑 Elimina punto
+          </button>
+        </div>
+      )}
     </div>
   );
 }

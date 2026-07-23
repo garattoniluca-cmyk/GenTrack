@@ -103,9 +103,10 @@ La tolleranza di chiusura è in **pixel schermo** (indipendente dallo zoom).
   snap alla griglia al rilascio).
 - Un drag = **un solo entry di undo** (batching nel historyMiddleware).
 - **Tasto destro riservato all'app** (context menu del browser soppresso sul
-  canvas): per ora tasto destro su un vertice = elimina punto (un poligono
-  chiuso non scende sotto 3 punti). Altre azioni col destro verranno aggiunte
-  qui in futuro.
+  canvas): il destro su un vertice apre un **menu contestuale grafico**
+  (voce unica per ora: "Elimina punto" — disabilitata se il poligono chiuso
+  ha solo 3 punti). Il menu si chiude con click altrove, Esc, wheel.
+  Nuove voci future si aggiungono a questo menu.
 - **Vista iniziale**: fit dell'intera area 5000×5000 m nel viewport (95% del
   lato corto), centrata sull'origine.
 - I valori derivati (conflitti, lunghezze) si calcolano nei componenti con
