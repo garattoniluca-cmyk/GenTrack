@@ -29,8 +29,8 @@
 |---|---|---|---|
 | `polygon.js` | Snap, self-intersection (polyline aperta + anello chiuso), lunghezze segmenti/totale (brute-force O(n²), n<100) | 1 | 🧪 |
 | `polygon.test.js` | 25 test sugli invarianti | 1 | ✅ |
-| `spline.js` | Catmull-Rom centripeta chiusa, arc-length resampling adattivo, generazione CP da poligono (CP0 = metà start) | 2 | 🧪 |
-| `spline.test.js` | 13 test sugli invarianti (2πR, spaziatura, ancoraggio, verso) | 2 | ✅ |
+| `spline.js` | Mezzeria fillet: rettilinei esatti + raccordi ad arco tangenti, clamp raggi, arc-length resampling adattivo, s=0 a metà start (D-018) | 2 | 🧪 |
+| `spline.test.js` | 17 test sugli invarianti (rettilinei esatti, archi sul cerchio, lunghezza analitica, verso, clamp) | 2 | ✅ |
 | `frame.js` | Parallel-transport frame lungo la curva | 3 | ⏳ |
 | `curvature.js` | Stima curvatura + euristica velocità `v=sqrt(a_lat/κ)` | 5 (usata anche in 4) | ⏳ |
 | `sectionProfile.js` | Profili trasversali (wall_edge, secondary_surface), interpolazione | 3 | ⏳ |

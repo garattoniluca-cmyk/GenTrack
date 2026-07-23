@@ -32,19 +32,18 @@
 
     "stage2_spline": {
       "type": "object",
+      "description": "Mezzeria = rettilinei del poligono + raccordi ad arco per-vertice (D-018). s=0 a metà del segmento start, s cresce nel verso di percorrenza.",
       "properties": {
-        "controlPoints": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["id", "x", "y"],
-            "properties": {
-              "id": { "type": "string" },
-              "x": { "type": "number" },
-              "y": { "type": "number" },
-              "tension": { "type": "number", "minimum": 0, "maximum": 1 }
-            }
-          }
+        "defaultCornerRadius": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 60,
+          "description": "Raggio di default dei raccordi (m)"
+        },
+        "cornerRadii": {
+          "type": "object",
+          "description": "Override per-vertice: chiave = indice vertice stage1, valore = raggio (m). Il raggio effettivo è clampato dalla lunghezza degli spigoli adiacenti.",
+          "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
         },
         "resampledArcLength": {
           "type": "object",

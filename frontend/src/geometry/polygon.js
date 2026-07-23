@@ -166,6 +166,17 @@ export function signedArea(points) {
   return s / 2;
 }
 
+/** Proiezione (clampata) del punto p sul segmento [a,b]. */
+export function projectPointOnSegment(p, a, b) {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return { x: a.x, y: a.y };
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return { x: a.x + t * dx, y: a.y + t * dy };
+}
+
 /** Distanza minima tra il punto p e il segmento [a,b]. */
 export function pointSegmentDistance(p, a, b) {
   const dx = b.x - a.x;

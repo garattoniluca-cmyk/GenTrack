@@ -1,18 +1,20 @@
-// SplineEditor.jsx — Fase 2: editing spline (Catmull-Rom centripeta chiusa).
-// Il poligono di Fase 1 resta visibile in trasparenza come riferimento.
-// Il ricampionamento arc-length è derivato puro dai CP (useMemo) e si
-// aggiorna a ogni modifica, come richiesto dal brief §4.2.
+// SplineEditor.jsx — Fase 2: mezzeria = rettilinei + raccordi ad arco.
+// I rettilinei del poligono restano esatti; ogni curva è un arco tangente di
+// raggio regolabile. La maniglia gialla su ogni curva si trascina per
+// cambiare il raggio (lungo la bisettrice); tasto destro = menu (reset).
 //
 // Interazioni:
-//   drag su un control point → sposta (snap alla griglia visibile al rilascio)
-//   click sulla curva        → inserisci un control point lì
-//   tasto destro su un CP    → menu (Elimina control point)
-//   rotellina / Space+drag   → zoom / pan
+//   drag sulla maniglia di curva → cambia il raggio di quel raccordo
+//   tasto destro sulla maniglia  → menu (Reimposta raggio default)
+//   rotellina / Space+drag       → zoom / pan
 
 import { useEffect, useState, useMemo } from 'react';
 import { Stage, Layer, Line, Circle, Text, Group, Arrow } from 'react-konva';
 import { useTrackStore } from '../../state/trackStore.js';
-import { resampleClosedSpline } from '../../geometry/spline.js';
+import {
+  resampleFilletPath,
+  radiusFromHandleDistance,
+} from '../../geometry/spline.js';
 import { useCanvasView } from './useCanvasView.js';
 import GridLayer from './GridLayer.jsx';
 import { COLORS } from './colors.js';
@@ -34,29 +36,37 @@ export default function SplineEditor() {
   } = useCanvasView();
 
   const [ctxMenu, setCtxMenu] = useState(null);
-  const [hoverCurve, setHoverCurve] = useState(false);
+  const [dragRadius, setDragRadius] = useState(null); // {origIndex, R} durante il drag
 
   const polygon = useTrackStore((s) => s.stage1Polygon);
   const spline = useTrackStore((s) => s.stage2Spline);
-  const moveControlPoint = useTrackStore((s) => s.moveControlPoint);
-  const insertControlPoint = useTrackStore((s) => s.insertControlPoint);
-  const removeControlPoint = useTrackStore((s) => s.removeControlPoint);
+  const setCornerRadius = useTrackStore((s) => s.setCornerRadius);
+  const resetCornerRadius = useTrackStore((s) => s.resetCornerRadius);
   const beginBatch = useTrackStore((s) => s.beginBatch);
   const endBatch = useTrackStore((s) => s.endBatch);
 
-  const { controlPoints } = spline;
-
-  // ricampionamento arc-length: derivato puro, ricalcolato a ogni modifica CP
+  // path derivato puro: rettilinei + archi, ricalcolato a ogni modifica
   const resampled = useMemo(
-    () => resampleClosedSpline(controlPoints),
-    [controlPoints]
+    () =>
+      resampleFilletPath(
+        polygon.points,
+        polygon.startSegment,
+        polygon.direction,
+        spline.radii,
+        spline.defaultRadius
+      ),
+    [
+      polygon.points,
+      polygon.startSegment,
+      polygon.direction,
+      spline.radii,
+      spline.defaultRadius,
+    ]
   );
 
-  // passo di griglia visibile (stesso meccanismo della Fase 1)
   let effGrid = polygon.gridSize;
   while (effGrid * view.scale < 8) effGrid *= 5;
 
-  // Esc chiude il menu
   useEffect(() => {
     const down = (e) => {
       if (e.key === 'Escape' && ctxMenu) setCtxMenu(null);
@@ -76,60 +86,48 @@ export default function SplineEditor() {
     };
   }, [ctxMenu]);
 
-  // --- drag control point ---
-  const onCpDragStart = () => beginBatch();
-  const onCpDragMove = (i) => (e) => {
-    moveControlPoint(i, { x: e.target.x(), y: e.target.y() }, false);
-  };
-  const onCpDragEnd = (i) => (e) => {
-    moveControlPoint(i, { x: e.target.x(), y: e.target.y() }, true, effGrid);
-    endBatch();
-  };
-
-  // --- click sulla curva: inserisci CP nel tratto giusto ---
-  const onCurveClick = (e) => {
-    if (e.evt.button !== 0 || spacePan) return;
-    e.cancelBubble = true;
+  // --- drag della maniglia di curva: raggio dalla distanza lungo la bisettrice ---
+  const onHandleDragStart = () => beginBatch();
+  const onHandleDragMove = (corner) => () => {
     const w = pointerWorld();
-    if (!w || resampled.samples.length === 0) return;
-    // sample più vicino al click → indice del tratto CP (t = (seg+u)/nCP)
-    let best = 0;
-    let bestD = Infinity;
-    for (let i = 0; i < resampled.samples.length; i++) {
-      const s = resampled.samples[i];
-      const d = (s.x - w.x) ** 2 + (s.y - w.y) ** 2;
-      if (d < bestD) {
-        bestD = d;
-        best = i;
-      }
-    }
-    const segIndex = Math.min(
-      controlPoints.length - 1,
-      Math.floor(resampled.samples[best].t * controlPoints.length)
+    if (!w) return;
+    const d =
+      (w.x - corner.V.x) * corner.bis.x + (w.y - corner.V.y) * corner.bis.y;
+    const R = Math.max(
+      2,
+      Math.min(corner.maxR, radiusFromHandleDistance(Math.max(0, d), corner.sinHalf))
     );
-    insertControlPoint(segIndex, w, effGrid);
+    setCornerRadius(corner.origIndex, R);
+    setDragRadius({ origIndex: corner.origIndex, R: Math.round(R) });
+  };
+  const onHandleDragEnd = () => {
+    endBatch();
+    setDragRadius(null);
   };
 
-  const onCpContextMenu = (i) => (e) => {
+  const onHandleContextMenu = (corner) => (e) => {
     e.evt.preventDefault();
     e.cancelBubble = true;
     const pos = stageRef.current.getPointerPosition();
-    if (pos) setCtxMenu({ index: i, x: pos.x, y: pos.y });
+    if (pos) setCtxMenu({ corner, x: pos.x, y: pos.y });
   };
 
   // --- render data ---
-  const cpR = 5 / view.scale;
+  const handleR = 6 / view.scale;
   const polyFlat = polygon.points.flatMap((p) => [p.x, p.y]);
-  const splineFlat = resampled.samples.flatMap((p) => [p.x, p.y]);
+  const pathFlat = resampled.samples.flatMap((p) => [p.x, p.y]);
+  const corners = resampled.corners.filter((c) => !c.skip);
 
-  // freccia del verso su s=0 (tangente dai primi sample)
+  // freccia del verso su s=0
   let startArrow = null;
   if (resampled.samples.length > 2) {
     const s0 = resampled.samples[0];
     const s1 = resampled.samples[1];
     const L = Math.hypot(s1.x - s0.x, s1.y - s0.y) || 1;
-    const d = { x: (s1.x - s0.x) / L, y: (s1.y - s0.y) / L };
-    startArrow = { s0, d };
+    startArrow = {
+      s0,
+      d: { x: (s1.x - s0.x) / L, y: (s1.y - s0.y) / L },
+    };
   }
 
   return (
@@ -137,7 +135,7 @@ export default function SplineEditor() {
       ref={containerRef}
       className="canvas-container"
       onContextMenu={(e) => e.preventDefault()}
-      style={{ cursor: spacePan ? 'grab' : hoverCurve ? 'copy' : 'default' }}
+      style={{ cursor: spacePan ? 'grab' : 'default' }}
     >
       <Stage
         ref={stageRef}
@@ -166,17 +164,14 @@ export default function SplineEditor() {
             />
           )}
 
-          {/* spline ricampionata */}
+          {/* mezzeria: rettilinei + raccordi */}
           {resampled.samples.length > 1 && (
             <Line
-              points={splineFlat}
+              points={pathFlat}
               closed
               stroke={COLORS.spline}
               strokeWidth={2.5 / view.scale}
-              hitStrokeWidth={14 / view.scale}
-              onClick={onCurveClick}
-              onMouseEnter={() => setHoverCurve(true)}
-              onMouseLeave={() => setHoverCurve(false)}
+              listening={false}
             />
           )}
 
@@ -186,7 +181,7 @@ export default function SplineEditor() {
               <Circle
                 x={startArrow.s0.x}
                 y={startArrow.s0.y}
-                radius={cpR * 1.6}
+                radius={handleR * 1.4}
                 stroke="#ffffff"
                 strokeWidth={2 / view.scale}
               />
@@ -217,32 +212,49 @@ export default function SplineEditor() {
             </Group>
           )}
 
-          {/* control points */}
-          <Group>
-            {controlPoints.map((cp, i) => (
-              <Circle
-                key={cp.id}
-                x={cp.x}
-                y={cp.y}
-                radius={i === 0 ? cpR * 1.3 : cpR}
-                fill={i === 0 ? COLORS.vertexFirst : COLORS.spline}
-                stroke="#0d1117"
-                strokeWidth={1.5 / view.scale}
-                draggable={!spacePan}
-                dragDistance={4}
-                onDragStart={onCpDragStart}
-                onDragMove={onCpDragMove(i)}
-                onDragEnd={onCpDragEnd(i)}
-                onContextMenu={onCpContextMenu(i)}
-                onMouseEnter={(e) => {
-                  e.target.getStage().container().style.cursor = 'move';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.getStage().container().style.cursor = '';
-                }}
-              />
-            ))}
-          </Group>
+          {/* maniglie dei raccordi: drag = raggio */}
+          {corners.map((c) => {
+            const isOverride = c.origIndex in spline.radii;
+            const showLabel =
+              dragRadius?.origIndex === c.origIndex || c.R * view.scale > 25;
+            return (
+              <Group key={`c${c.origIndex}`}>
+                <Circle
+                  x={c.arcMid.x}
+                  y={c.arcMid.y}
+                  radius={handleR}
+                  fill={isOverride ? COLORS.label : COLORS.spline}
+                  stroke="#0d1117"
+                  strokeWidth={1.5 / view.scale}
+                  draggable={!spacePan}
+                  dragDistance={4}
+                  onDragStart={onHandleDragStart}
+                  onDragMove={onHandleDragMove(c)}
+                  onDragEnd={onHandleDragEnd}
+                  onContextMenu={onHandleContextMenu(c)}
+                  onMouseEnter={(e) => {
+                    e.target.getStage().container().style.cursor = 'ew-resize';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.getStage().container().style.cursor = '';
+                  }}
+                />
+                {showLabel && (
+                  <Text
+                    x={c.arcMid.x + c.bis.x * (16 / view.scale)}
+                    y={c.arcMid.y + c.bis.y * (16 / view.scale)}
+                    text={`R ${Math.round(c.R)}`}
+                    fontSize={10 / view.scale}
+                    fill={isOverride ? COLORS.label : COLORS.splineDim}
+                    scaleY={-1}
+                    offsetX={(4 * 10 * 0.27) / view.scale}
+                    offsetY={5 / view.scale}
+                    listening={false}
+                  />
+                )}
+              </Group>
+            );
+          })}
         </Layer>
       </Stage>
 
@@ -252,6 +264,11 @@ export default function SplineEditor() {
             x: {cursorWorld.x.toFixed(1)} m &nbsp; y: {cursorWorld.y.toFixed(1)} m
             &nbsp;·&nbsp; zoom:{' '}
             {view.scale >= 1 ? view.scale.toFixed(0) : view.scale.toFixed(2)} px/m
+            {dragRadius && (
+              <>
+                &nbsp;·&nbsp; <b>R = {dragRadius.R} m</b>
+              </>
+            )}
           </span>
         )}
       </div>
@@ -268,20 +285,18 @@ export default function SplineEditor() {
           onContextMenu={(e) => e.preventDefault()}
         >
           <button
-            disabled={ctxMenu.index === 0 || controlPoints.length <= 3}
+            disabled={!(ctxMenu.corner.origIndex in spline.radii)}
             title={
-              ctxMenu.index === 0
-                ? 'Il CP dello start (s=0) non è eliminabile'
-                : controlPoints.length <= 3
-                  ? 'La spline chiusa richiede almeno 3 control point'
-                  : `Elimina il control point ${ctxMenu.index + 1}`
+              ctxMenu.corner.origIndex in spline.radii
+                ? `Torna al raggio default (${spline.defaultRadius} m)`
+                : 'Questa curva usa già il raggio default'
             }
             onClick={() => {
-              removeControlPoint(ctxMenu.index);
+              resetCornerRadius(ctxMenu.corner.origIndex);
               setCtxMenu(null);
             }}
           >
-            🗑 Elimina control point
+            ↺ Reimposta raggio default
           </button>
         </div>
       )}

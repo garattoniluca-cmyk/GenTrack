@@ -12,7 +12,7 @@ import {
   segmentLengths,
   canClose,
 } from './geometry/polygon.js';
-import { resampleClosedSpline } from './geometry/spline.js';
+import { resampleFilletPath } from './geometry/spline.js';
 
 export default function App() {
   const phase = useTrackStore((s) => s.phase);
@@ -52,10 +52,27 @@ export default function App() {
     [segments]
   );
 
-  // Fase 2: ricampionamento derivato (stesso memo dell'editor)
+  // Fase 2: path derivato (stesso memo dell'editor)
   const resampled = useMemo(
-    () => resampleClosedSpline(spline.controlPoints),
-    [spline.controlPoints]
+    () =>
+      resampleFilletPath(
+        polygon.points,
+        polygon.startSegment,
+        polygon.direction,
+        spline.radii,
+        spline.defaultRadius
+      ),
+    [
+      polygon.points,
+      polygon.startSegment,
+      polygon.direction,
+      spline.radii,
+      spline.defaultRadius,
+    ]
+  );
+  const curveCount = useMemo(
+    () => resampled.corners.filter((c) => !c.skip).length,
+    [resampled.corners]
   );
 
   const startSegLength =
@@ -68,18 +85,19 @@ export default function App() {
   const phase2Ready =
     polygon.closed && polygon.startSegment != null && !startTooShort;
 
-  // ingresso in Fase 2: genera/rigenera i CP se il poligono è cambiato
+  // ingresso in Fase 2: se il poligono è cambiato, i raggi override decadono
   const goPhase2 = () => {
     if (!phase2Ready) return;
     const st = useTrackStore.getState();
     const fp = computeStage1Fingerprint(st.stage1Polygon);
     const hasEdits =
-      st.stage2Spline.controlPoints.length >= 3 &&
+      Object.keys(st.stage2Spline.radii).length > 0 &&
+      st.stage2Spline.sourceFingerprint != null &&
       st.stage2Spline.sourceFingerprint !== fp;
     if (hasEdits) {
       const ok = window.confirm(
-        'Il poligono è cambiato dalla generazione della spline.\n' +
-          'Rigenerare i control point? Le modifiche manuali alla spline andranno perse.'
+        'Il poligono è cambiato dall\'ultima sessione di Fase 2.\n' +
+          'I raggi personalizzati delle curve verranno reimpostati al default. Continuare?'
       );
       if (!ok) return;
       st.generateSplineFromPolygon(true);
@@ -92,7 +110,7 @@ export default function App() {
   const status =
     phase === 2
       ? {
-          text: `${spline.controlPoints.length} control point · ${resampled.sampleCount} sample`,
+          text: `${curveCount} curve · ${resampled.sampleCount} sample`,
           cls: 'ok',
         }
       : polygon.closed
@@ -128,6 +146,21 @@ export default function App() {
             2 · Spline
           </button>
         </div>
+
+        {phase === 2 && (
+          <label title="Raggio di default dei raccordi di curva">
+            Raggio curve (m)
+            <input
+              type="number"
+              min="5"
+              step="5"
+              value={spline.defaultRadius}
+              onChange={(e) =>
+                useTrackStore.getState().setDefaultCornerRadius(parseFloat(e.target.value))
+              }
+            />
+          </label>
+        )}
 
         {phase === 1 && (
           <>
@@ -236,7 +269,8 @@ export default function App() {
               <pre>
                 {JSON.stringify(
                   {
-                    controlPoints: spline.controlPoints,
+                    defaultCornerRadius: spline.defaultRadius,
+                    cornerRadii: spline.radii,
                     resampledArcLength: {
                       totalLength: Math.round(resampled.totalLength * 10) / 10,
                       sampleCount: resampled.sampleCount,
@@ -250,9 +284,9 @@ export default function App() {
               <div className="hints">
                 <h3>Comandi</h3>
                 <ul>
-                  <li><b>Drag su un control point</b> — sposta</li>
-                  <li><b>Click sulla curva</b> — inserisci control point</li>
-                  <li><b>Tasto destro su un CP</b> — menu (Elimina)</li>
+                  <li><b>Drag sulla maniglia di curva</b> — cambia raggio</li>
+                  <li><b>Tasto destro sulla maniglia</b> — reimposta default</li>
+                  <li>Maniglia <b>gialla</b> = raggio personalizzato</li>
                   <li><b>Rotellina</b> — zoom</li>
                   <li><b>Space + drag</b> / rotellina premuta — pan</li>
                 </ul>
@@ -305,7 +339,10 @@ export default function App() {
         ) : (
           <>
             <span>
-              Control point: <b>{spline.controlPoints.length}</b>
+              Curve: <b>{curveCount}</b>
+              {Object.keys(spline.radii).length > 0 && (
+                <> ({Object.keys(spline.radii).length} personalizzate)</>
+              )}
             </span>
             <span>
               Lunghezza tracciato: <b>{resampled.totalLength.toFixed(1)} m</b>
@@ -317,7 +354,7 @@ export default function App() {
               🏁 s = 0 sullo start ·{' '}
               {polygon.direction === 'cw' ? 'orario ⟳' : 'antiorario ⟲'}
             </span>
-            <span className="dim">● spline chiusa C1</span>
+            <span className="dim">● rettilinei esatti + archi C1</span>
           </>
         )}
       </footer>

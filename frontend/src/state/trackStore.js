@@ -10,8 +10,8 @@ import {
   violatesClearance,
   signedArea,
   dist,
+  projectPointOnSegment,
 } from '../geometry/polygon.js';
-import { generateControlPointsFromPolygon } from '../geometry/spline.js';
 import {
   DEFAULT_GRID_SIZE,
   DEFAULT_MIN_CLEARANCE,
@@ -42,8 +42,9 @@ export const computeStage1Fingerprint = (stage1) =>
   JSON.stringify([stage1.points, stage1.startSegment, stage1.direction]);
 
 const initialSpline = {
-  controlPoints: [], // [{id, x, y, tension}] — CP0 = metà rettilineo start (s=0)
-  sourceFingerprint: null, // impronta dello stage1 da cui sono stati generati
+  defaultRadius: 60, // raggio di default dei raccordi (m)
+  radii: {}, // override per-vertice: { [indiceVerticeOriginale]: raggio }
+  sourceFingerprint: null, // impronta dello stage1 da cui deriva il path
 };
 
 export const useTrackStore = create(
@@ -194,77 +195,49 @@ export const useTrackStore = create(
         set({ stage1Polygon: { ...stage1Polygon, gridSize } });
       },
 
-      // ---- Fase 2: spline ----
+      // ---- Fase 2: raccordi (fillet) ----
 
       /**
-       * (Ri)genera i control point dal poligono di Fase 1. Se l'impronta dello
-       * stage1 non è cambiata e i CP esistono già, non fa nulla (conserva le
-       * modifiche manuali); force=true rigenera comunque.
+       * Allinea la Fase 2 al poligono di Fase 1. Se l'impronta dello stage1 è
+       * cambiata (o force=true) i raggi override vengono azzerati (gli indici
+       * dei vertici non sono più affidabili); altrimenti non fa nulla.
        */
       generateSplineFromPolygon: (force = false) => {
         const { stage1Polygon, stage2Spline } = get();
         if (!stage1Polygon.closed || stage1Polygon.startSegment == null) return;
         const fp = computeStage1Fingerprint(stage1Polygon);
-        if (
-          !force &&
-          stage2Spline.controlPoints.length >= 3 &&
-          stage2Spline.sourceFingerprint === fp
-        ) {
-          return;
-        }
-        const controlPoints = generateControlPointsFromPolygon(
-          stage1Polygon.points,
-          stage1Polygon.startSegment,
-          stage1Polygon.direction
-        );
-        set({ stage2Spline: { controlPoints, sourceFingerprint: fp } });
-      },
-
-      /** Sposta un control point (drag: snap=false fluido, true al rilascio). */
-      moveControlPoint: (index, worldPoint, snap = true, snapSize) => {
-        const { stage2Spline, stage1Polygon } = get();
-        const cps = stage2Spline.controlPoints;
-        if (index < 0 || index >= cps.length) return;
-        const p = snap
-          ? snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize)
-          : clampToWorld(worldPoint);
-        const next = cps.slice();
-        next[index] = { ...next[index], x: p.x, y: p.y };
-        set({ stage2Spline: { ...stage2Spline, controlPoints: next } });
-      },
-
-      /** Inserisce un CP dopo l'indice `afterIndex` (click sulla curva). */
-      insertControlPoint: (afterIndex, worldPoint, snapSize) => {
-        const { stage2Spline, stage1Polygon } = get();
-        const cps = stage2Spline.controlPoints;
-        if (afterIndex < 0 || afterIndex >= cps.length) return;
-        const p = snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize);
-        const maxId = cps.reduce(
-          (m, cp) => Math.max(m, parseInt(cp.id.replace('cp_', ''), 10) || 0),
-          0
-        );
-        const next = cps.slice();
-        next.splice(afterIndex + 1, 0, {
-          id: `cp_${maxId + 1}`,
-          x: p.x,
-          y: p.y,
-          tension: 0.5,
+        if (!force && stage2Spline.sourceFingerprint === fp) return;
+        set({
+          stage2Spline: { ...stage2Spline, radii: {}, sourceFingerprint: fp },
         });
-        set({ stage2Spline: { ...stage2Spline, controlPoints: next } });
       },
 
-      /**
-       * Rimuove un control point. CP0 (ancora s=0 sullo start) non è
-       * rimovibile; la spline chiusa richiede almeno 3 CP.
-       */
-      removeControlPoint: (index) => {
+      /** Raggio di default dei raccordi (m). */
+      setDefaultCornerRadius: (v) => {
+        if (!(v >= 1)) return;
         const { stage2Spline } = get();
-        const cps = stage2Spline.controlPoints;
-        if (index <= 0 || index >= cps.length) return;
-        if (cps.length <= 3) return;
-        const next = cps.slice();
-        next.splice(index, 1);
-        set({ stage2Spline: { ...stage2Spline, controlPoints: next } });
+        set({ stage2Spline: { ...stage2Spline, defaultRadius: v } });
+      },
+
+      /** Raggio override della curva sul vertice `origIndex`. */
+      setCornerRadius: (origIndex, radius) => {
+        if (!(radius >= 1)) return;
+        const { stage2Spline } = get();
+        set({
+          stage2Spline: {
+            ...stage2Spline,
+            radii: { ...stage2Spline.radii, [origIndex]: Math.round(radius) },
+          },
+        });
+      },
+
+      /** Rimuove l'override: la curva torna al raggio di default. */
+      resetCornerRadius: (origIndex) => {
+        const { stage2Spline } = get();
+        if (!(origIndex in stage2Spline.radii)) return;
+        const radii = { ...stage2Spline.radii };
+        delete radii[origIndex];
+        set({ stage2Spline: { ...stage2Spline, radii } });
       },
 
       /**
@@ -284,23 +257,25 @@ export const useTrackStore = create(
       },
 
       /**
-       * Inserisce un nuovo punto (snappato) sul segmento `segIndex`
+       * Inserisce un nuovo punto sul segmento `segIndex`
        * (segmento i: points[i] → points[(i+1) % n]; n-1 = segmento di chiusura).
+       * Il punto viene PROIETTATO sul segmento (niente snap a griglia: lo
+       * snap poteva spostarlo fuori dal segmento — deve rimanerci sopra).
        */
-      insertPointOnSegment: (segIndex, worldPoint, snapSize) => {
+      insertPointOnSegment: (segIndex, worldPoint) => {
         const { stage1Polygon, minClearance } = get();
         const pts = stage1Polygon.points;
         if (segIndex < 0 || segIndex >= pts.length) return;
-        const snapped = snapClamp(worldPoint, snapSize ?? stage1Polygon.gridSize);
         const a = pts[segIndex];
         const b = pts[(segIndex + 1) % pts.length];
-        // niente duplicati con gli estremi del segmento
-        if (
-          (a.x === snapped.x && a.y === snapped.y) ||
-          (b.x === snapped.x && b.y === snapped.y)
-        ) {
-          return;
-        }
+        const proj = projectPointOnSegment(clampToWorld(worldPoint), a, b);
+        // centimetro di risoluzione, resta comunque sul segmento
+        const snapped = {
+          x: Math.round(proj.x * 100) / 100,
+          y: Math.round(proj.y * 100) / 100,
+        };
+        // niente duplicati (o quasi-duplicati) con gli estremi del segmento
+        if (dist(snapped, a) < 1e-6 || dist(snapped, b) < 1e-6) return;
         // Distanza minima da punti/segmenti (escluso il segmento su cui si inserisce)
         if (
           violatesClearance(pts, snapped, minClearance, {

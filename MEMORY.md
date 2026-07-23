@@ -68,7 +68,17 @@ Editor poligonale (Fase 1) + editor spline (Fase 2) su http://localhost:5173.
       - Dev: `window.__trackStore` esposto in DEV per debug/collaudo
       - Collaudo e2e via store: tracciato 9 punti → 5107.7 m, 1022 sample,
         CP0 esattamente a metà start, ordine antiorario corretto
-- [ ] Fase 2: **validazione visiva/interattiva dell'utente** in corso.
+- [x] 2026-07-23 — **PIVOT Fase 2 su feedback utente** (D-018): la Catmull-Rom
+      distruggeva i rettilinei → mezzeria riscritta come **rettilinei esatti +
+      raccordi ad arco tangenti** (fillet), raggio default 60 m in toolbar +
+      override per-curva trascinando la maniglia sull'arco (label "R xx",
+      gialla se personalizzata, destro = reset). Raggio clampato dagli spigoli
+      adiacenti; vertici collineari senza arco. Schema stage2 aggiornato:
+      {defaultCornerRadius, cornerRadii, resampledArcLength}. 55 test verdi
+      (rettilinei esatti entro 1e-9, archi sul cerchio, lunghezza analitica).
+- [x] 2026-07-23 — **Fix inserimento su segmento** (D-019): proiezione sul
+      segmento (1 cm) invece dello snap a griglia che lo spostava fuori.
+- [ ] Fase 2 (fillet): **validazione visiva/interattiva dell'utente** in corso.
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —
       collaudo via `window.__trackStore` + verifica interattiva manuale.

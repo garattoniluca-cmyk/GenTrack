@@ -163,30 +163,50 @@ lunghezza mostrata); se un editing successivo accorcia lo start sotto il
 minimo, la statusbar mostra un errore ma lo start non viene rimosso
 automaticamente.
 
-### D-016 — Catmull-Rom centripeta implementata in proprio (Fase 2)
-**Data**: 2026-07-23 (approvata dall'utente)
-**Decisione**: la spline di Fase 2 è una Catmull-Rom **centripeta** (α=0.5,
-Barry-Goldman) chiusa, implementata in `geometry/spline.js` senza three.js
-(2D puro; three arriverà col 3D in Fase 3). Ricampionamento arc-length
-adattivo: 1 sample ogni ~5 m, clamp [200, 2000].
-**Motivazione**: la centripeta evita cuspidi/auto-loop; niente dipendenza 3D
-prematura. **P-003 chiusa**: tension per punto RINVIATA (campo `tension`
-resta nello schema per il futuro).
-**Scartato**: three.CatmullRomCurve3 (porta tutta la dipendenza three per
-una curva 2D); tension per punto ora (UI+matematica non necessarie).
+### D-016 — ~~Catmull-Rom centripeta~~ (SUPERATA da D-018)
+**Data**: 2026-07-23 · **Superata**: 2026-07-23 stesso giorno
+**Storia**: prima implementazione della Fase 2 con Catmull-Rom centripeta
+passante per i vertici. **Bocciata dall'utente al primo collaudo**: la spline
+arrotondava TUTTO, distruggendo i rettilinei ("circuito gommosetto tutto in
+curvatura"). Lezione: i rettilinei sono un vincolo duro del dominio, non un
+caso particolare. → vedi D-018. P-003 (tension) resta chiusa/rinviata.
+
+### D-018 — Mezzeria = rettilinei esatti + raccordi ad arco (fillet)
+**Data**: 2026-07-23 (da feedback utente su D-016)
+**Decisione**: la mezzeria della Fase 2 segue ESATTAMENTE i segmenti del
+poligono; a ogni vertice un **arco tangente** (fillet) di raggio regolabile:
+default globale (60 m, toolbar) + override per-curva trascinando la maniglia
+sull'arco (lungo la bisettrice; etichetta "R xx"; gialla = personalizzata;
+tasto destro = reset al default). Il raggio è clampato automaticamente dalla
+lunghezza degli spigoli adiacenti (t = R/tan(φ/2) ≤ 0.49·spigolo). Vertici
+collineari → nessun arco. Continuità C1 per costruzione (arco tangente alle
+rette); C2 (clothoidi) eventualmente in futuro. Schema: `stage2_spline =
+{defaultCornerRadius, cornerRadii{vertexIndex: R}, resampledArcLength}`.
+**Motivazione**: è come si progettano i circuiti reali — i rettilinei sono
+sacri, le curve hanno raggio costante e controllabile. Una spline passante
+per i vertici non può garantirlo.
+**Scartato**: Catmull-Rom con CP collineari extra per irrigidire i
+rettilinei (approssimazione, bowing residuo ai bordi).
+
+### D-019 — Inserimento punto su segmento: proiezione, non snap
+**Data**: 2026-07-23 (bug segnalato dall'utente)
+**Decisione**: il punto inserito con click su un segmento viene PROIETTATO
+sul segmento (risoluzione 1 cm), non snappato alla griglia: lo snap poteva
+spostarlo fuori dal segmento (specie con griglia ispessita dallo zoom out).
+**Motivazione**: un punto inserito su un segmento deve rimanere sul segmento
+— altrimenti il rettilineo si spezza in due tratti non collineari.
 
 ### D-017 — Ancoraggio s=0 e derivazione Fase 1 → Fase 2
-**Data**: 2026-07-23 (approvata dall'utente)
-**Decisione**: il PRIMO control point è un punto extra alla **metà del
-rettilineo di start** → s=0 cade esattamente lì; i CP successivi sono i
-vertici del poligono ordinati nel **verso di percorrenza** scelto. CP0 non è
-eliminabile (è l'ancora di s=0). Rigenerazione: entrando in Fase 2, se
-l'impronta dello stage1 (punti+start+verso) è cambiata e ci sono modifiche
-manuali, si chiede conferma prima di rigenerare (le modifiche si perdono —
-pipeline derivativa, brief §1). `resampledArcLength` NON vive nello store:
-è derivato puro dai CP (useMemo nei componenti) — undo/redo sempre coerente.
+**Data**: 2026-07-23 (approvata dall'utente; aggiornata con D-018)
+**Decisione**: il path della mezzeria parte dalla **metà del rettilineo di
+start** → s=0 cade esattamente lì; il path percorre i vertici nel **verso di
+percorrenza** scelto. Rigenerazione: entrando in Fase 2, se l'impronta dello
+stage1 (punti+start+verso) è cambiata, i raggi personalizzati decadono (con
+conferma) perché gli indici dei vertici non sono più affidabili — pipeline
+derivativa, brief §1. `resampledArcLength` NON vive nello store: è derivato
+puro (useMemo nei componenti) — undo/redo sempre coerente.
 **Motivazione**: s=0 esatto sulla linea del traguardo; lo start ha ≥700 m
-(D-015) quindi il CP extra a metà rettilineo non distorce la curva.
+(D-015) quindi la metà del rettilineo è sempre su un tratto rettilineo.
 
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
