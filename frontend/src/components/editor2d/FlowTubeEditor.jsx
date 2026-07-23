@@ -194,50 +194,6 @@ export default function FlowTubeEditor({ resampled, elevation }) {
           {/* mezzeria termica per quota */}
           {zRange && <Shape sceneFunc={drawHeatCenterline} />}
 
-          {/* marker delle curve: click = imposta banking */}
-          {corners.map((c) => {
-            const bk = cornerBanking[c.origIndex];
-            const hasBank = bk && bk.angleDeg !== 0;
-            return (
-              <Group key={`bk${c.origIndex}`}>
-                <Circle
-                  x={c.mid.x}
-                  y={c.mid.y}
-                  radius={7 / view.scale}
-                  fill={hasBank ? COLORS.label : '#565e6b'}
-                  stroke="#0d1117"
-                  strokeWidth={1.5 / view.scale}
-                  onClick={(e) => {
-                    if (e.evt.button !== 0) return;
-                    e.cancelBubble = true;
-                    const pos = stageRef.current.getPointerPosition();
-                    if (pos) setBankEdit({ origIndex: c.origIndex, x: pos.x, y: pos.y });
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.getStage().container().style.cursor = 'pointer';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.getStage().container().style.cursor = '';
-                  }}
-                />
-                {hasBank && (
-                  <Text
-                    x={c.mid.x}
-                    y={c.mid.y}
-                    text={`${bk.angleDeg > 0 ? '+' : ''}${bk.angleDeg}°`}
-                    fontSize={11 / view.scale}
-                    fontStyle="bold"
-                    fill={COLORS.label}
-                    scaleY={-1}
-                    offsetX={-(10 / view.scale)}
-                    offsetY={-(12 / view.scale)}
-                    listening={false}
-                  />
-                )}
-              </Group>
-            );
-          })}
-
           {/* marker s=0 + freccia verso */}
           {startArrow && (
             <Group>
@@ -274,6 +230,53 @@ export default function FlowTubeEditor({ resampled, elevation }) {
               />
             </Group>
           )}
+        </Layer>
+
+        {/* layer INTERATTIVO: marker delle curve (click = imposta banking) */}
+        <Layer>
+          {corners.map((c) => {
+            const bk = cornerBanking[c.origIndex];
+            const hasBank = bk && bk.angleDeg !== 0;
+            return (
+              <Group key={`bk${c.origIndex}`}>
+                <Circle
+                  x={c.mid.x}
+                  y={c.mid.y}
+                  radius={7 / view.scale}
+                  hitStrokeWidth={10 / view.scale}
+                  fill={hasBank ? COLORS.label : '#565e6b'}
+                  stroke="#0d1117"
+                  strokeWidth={1.5 / view.scale}
+                  onClick={(e) => {
+                    if (e.evt.button !== 0) return;
+                    e.cancelBubble = true;
+                    const pos = stageRef.current.getPointerPosition();
+                    if (pos) setBankEdit({ origIndex: c.origIndex, x: pos.x, y: pos.y });
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.getStage().container().style.cursor = 'pointer';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.getStage().container().style.cursor = '';
+                  }}
+                />
+                {hasBank && (
+                  <Text
+                    x={c.mid.x}
+                    y={c.mid.y}
+                    text={`${bk.angleDeg > 0 ? '+' : ''}${bk.angleDeg}°`}
+                    fontSize={11 / view.scale}
+                    fontStyle="bold"
+                    fill={COLORS.label}
+                    scaleY={-1}
+                    offsetX={-(10 / view.scale)}
+                    offsetY={-(12 / view.scale)}
+                    listening={false}
+                  />
+                )}
+              </Group>
+            );
+          })}
         </Layer>
       </Stage>
 
