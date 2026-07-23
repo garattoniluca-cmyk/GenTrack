@@ -13,7 +13,7 @@
 //   rotellina / Space+drag       → zoom / pan
 
 import { useEffect, useState, useMemo } from 'react';
-import { Stage, Layer, Line, Circle, Rect, Text, Group, Arrow } from 'react-konva';
+import { Stage, Layer, Line, Circle, Rect, Text, Group, Arrow, Shape } from 'react-konva';
 import { useTrackStore } from '../../state/trackStore.js';
 import { resampleFilletPath, MIN_ARM } from '../../geometry/spline.js';
 import { useCanvasView } from './useCanvasView.js';
@@ -116,8 +116,27 @@ export default function SplineEditor() {
   // --- render data ---
   const handleS = 9 / view.scale; // lato dei quadratini-maniglia
   const polyFlat = polygon.points.flatMap((p) => [p.x, p.y]);
-  const pathFlat = resampled.samples.flatMap((p) => [p.x, p.y]);
   const corners = resampled.corners.filter((c) => !c.skip);
+
+  // Mezzeria disegnata con la GEOMETRIA ESATTA (rette + quadraticCurveTo):
+  // il browser tassella le Bézier alla risoluzione dello schermo → nessuna
+  // spezzata a qualsiasi zoom. I sample equidistanti restano solo per i calcoli.
+  const drawExactPath = (ctx, shape) => {
+    const { startMid, corners: cs } = resampled;
+    if (!startMid || cs.length === 0) return;
+    ctx.beginPath();
+    ctx.moveTo(startMid.x, startMid.y);
+    for (const c of cs) {
+      if (c.skip) {
+        ctx.lineTo(c.V.x, c.V.y);
+        continue;
+      }
+      ctx.lineTo(c.T1.x, c.T1.y);
+      ctx.quadraticCurveTo(c.V.x, c.V.y, c.T2.x, c.T2.y);
+    }
+    ctx.closePath();
+    ctx.fillStrokeShape(shape);
+  };
 
   let startArrow = null;
   if (resampled.samples.length > 2) {
@@ -191,11 +210,10 @@ export default function SplineEditor() {
             />
           )}
 
-          {/* mezzeria: rettilinei + stondature */}
+          {/* mezzeria: geometria esatta (rette + Bézier native) */}
           {resampled.samples.length > 1 && (
-            <Line
-              points={pathFlat}
-              closed
+            <Shape
+              sceneFunc={drawExactPath}
               stroke={COLORS.spline}
               strokeWidth={2.5 / view.scale}
               listening={false}

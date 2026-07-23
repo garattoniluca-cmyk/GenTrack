@@ -87,6 +87,10 @@ Editor poligonale (Fase 1) + editor spline (Fase 2) su http://localhost:5173.
       tangente (C1); due maniglie per curva + guide; etichetta R~ (raggio
       minimo); braccio default 60 m in toolbar. Schema stage2 aggiornato:
       {defaultArmLength, cornerArms{in,out}}. 58 test verdi.
+- [x] 2026-07-23 — **Fix definizione curve**: la mezzeria è ora disegnata con
+      la geometria ESATTA (lineTo + quadraticCurveTo nativi, tassellati dal
+      browser) → niente spezzate a nessuno zoom. I sample equidistanti restano
+      solo per i calcoli; densità interna alzata (archi ~1 m, maxCount 5000).
 - [ ] Fase 2 (bracci asimmetrici): **validazione utente** in corso.
 - ⚠ Punto dolente emergente: ogni reload/HMR perde il tracciato disegnato —
       valutare di anticipare import/export JSON (persistenza locale).

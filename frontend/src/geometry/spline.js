@@ -149,7 +149,7 @@ export function resampleFilletPath(
   direction,
   arms = {},
   defaultArm = 60,
-  { spacing = 5, minCount = 200, maxCount = 2000 } = {}
+  { spacing = 5, minCount = 200, maxCount = 5000 } = {}
 ) {
   const n = points?.length ?? 0;
   if (n < 3 || startSegment == null || startSegment < 0 || startSegment >= n) {
@@ -173,7 +173,7 @@ export function resampleFilletPath(
     }
     push(c.T1); // rettilineo fino all'inizio della stondatura
     const estLen = (dist(c.T1, c.V) + dist(c.V, c.T2) + dist(c.T1, c.T2)) / 2;
-    const steps = Math.max(8, Math.ceil(estLen / 2));
+    const steps = Math.max(16, Math.ceil(estLen / 1)); // ~1 m per step sugli archi
     for (let k = 1; k <= steps; k++) {
       push(cornerBezierPoint(c.T1, c.V, c.T2, k / steps));
     }
