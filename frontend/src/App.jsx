@@ -59,8 +59,8 @@ export default function App() {
           Griglia (m)
           <input
             type="number"
-            min="0.25"
-            step="0.25"
+            min="1"
+            step="1"
             value={polygon.gridSize}
             onChange={(e) => setGridSize(parseFloat(e.target.value))}
           />

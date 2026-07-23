@@ -32,6 +32,10 @@ Editor poligonale 2D funzionante su http://localhost:5173 (`npm run dev` in
       - Preview attiva: `.claude/launch.json` → trackgen-frontend @5173
       - Bug risolti: loop infinito getSnapshot (selettori zustand),
         centraggio vista su dimensione container reale
+- [x] 2026-07-23 — Canvas portato a **5000×5000 m** (bordo tratteggiato, punti
+      clampati), griglia default **10 m**, **barra di scala** stile cartina,
+      zoom 0.08–200 px/m, griglia renderizzata solo nel viewport (perf).
+      Costanti in `frontend/src/config.js` (D-013).
 - [ ] Fase 1: **validazione visiva/interattiva dell'utente** in corso.
       Nota: i test con click sintetici via CDP sono inaffidabili (il pannello
       preview cambia dimensione e l'utente può interagire in parallelo) —

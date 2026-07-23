@@ -25,10 +25,15 @@ import {
   canClose,
   dist,
 } from '../../geometry/polygon.js';
+import {
+  WORLD_HALF_EXTENT,
+  ZOOM_MIN,
+  ZOOM_MAX,
+  ZOOM_DEFAULT,
+} from '../../config.js';
 
 const CLOSE_TOLERANCE_PX = 12; // tolleranza chiusura in spazio SCHERMO (indipendente dallo zoom)
 const LABEL_MIN_PX = 30; // mostra l'etichetta solo se il segmento a schermo è più lungo
-const GRID_EXTENT = 500; // metri di griglia disegnati attorno all'origine
 
 const COLORS = {
   grid: '#2a2d33',
@@ -50,7 +55,7 @@ export default function GridCanvas() {
   const containerRef = useRef(null);
   const stageRef = useRef(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
-  const [view, setView] = useState({ x: 0, y: 0, scale: 12 }); // px per metro
+  const [view, setView] = useState({ x: 0, y: 0, scale: ZOOM_DEFAULT }); // px per metro
   const [cursorWorld, setCursorWorld] = useState(null);
   const [spacePan, setSpacePan] = useState(false);
   const [hoverSeg, setHoverSeg] = useState(null);
@@ -142,7 +147,7 @@ export default function GridCanvas() {
     const pos = stage.getPointerPosition();
     const factor = e.evt.deltaY < 0 ? 1.15 : 1 / 1.15;
     setView((v) => {
-      const scale = Math.min(200, Math.max(1, v.scale * factor));
+      const scale = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, v.scale * factor));
       const k = scale / v.scale;
       return {
         scale,
@@ -256,26 +261,63 @@ export default function GridCanvas() {
   let gridStep = gridSize;
   while (gridStep * view.scale < 8) gridStep *= 5;
 
+  // disegna solo le linee visibili nel viewport (l'area è 5000×5000 m)
+  const E = WORLD_HALF_EXTENT;
+  const visXMin = Math.max(-E, (0 - view.x) / view.scale);
+  const visXMax = Math.min(E, (size.width - view.x) / view.scale);
+  const visYMin = Math.max(-E, -(size.height - view.y) / view.scale);
+  const visYMax = Math.min(E, -(0 - view.y) / view.scale);
+
   const gridLines = [];
-  for (let v = -GRID_EXTENT; v <= GRID_EXTENT; v += gridStep) {
+  const startX = Math.ceil(visXMin / gridStep) * gridStep;
+  for (let v = startX; v <= visXMax; v += gridStep) {
     const major = Math.abs(v % (gridStep * 5)) < 1e-9;
     gridLines.push(
       <Line
         key={`v${v}`}
-        points={[v, -GRID_EXTENT, v, GRID_EXTENT]}
-        stroke={v === 0 ? COLORS.axis : major ? COLORS.gridMajor : COLORS.grid}
-        strokeWidth={(v === 0 ? 1.5 : 1) / view.scale}
-        listening={false}
-      />,
-      <Line
-        key={`h${v}`}
-        points={[-GRID_EXTENT, v, GRID_EXTENT, v]}
+        points={[v, Math.max(-E, visYMin), v, Math.min(E, visYMax)]}
         stroke={v === 0 ? COLORS.axis : major ? COLORS.gridMajor : COLORS.grid}
         strokeWidth={(v === 0 ? 1.5 : 1) / view.scale}
         listening={false}
       />
     );
   }
+  const startY = Math.ceil(visYMin / gridStep) * gridStep;
+  for (let v = startY; v <= visYMax; v += gridStep) {
+    const major = Math.abs(v % (gridStep * 5)) < 1e-9;
+    gridLines.push(
+      <Line
+        key={`h${v}`}
+        points={[Math.max(-E, visXMin), v, Math.min(E, visXMax), v]}
+        stroke={v === 0 ? COLORS.axis : major ? COLORS.gridMajor : COLORS.grid}
+        strokeWidth={(v === 0 ? 1.5 : 1) / view.scale}
+        listening={false}
+      />
+    );
+  }
+  // bordo dell'area di lavoro
+  gridLines.push(
+    <Line
+      key="worldBounds"
+      points={[-E, -E, E, -E, E, E, -E, E]}
+      closed
+      stroke={COLORS.axis}
+      strokeWidth={2 / view.scale}
+      dash={[10 / view.scale, 6 / view.scale]}
+      listening={false}
+    />
+  );
+
+  // --- barra di scala (come nelle cartine): lunghezza "tonda" 1-2-5×10^n ---
+  const targetPx = 120;
+  const rawLen = targetPx / view.scale;
+  const pow10 = Math.pow(10, Math.floor(Math.log10(rawLen)));
+  const niceLen =
+    [1, 2, 5, 10].map((m) => m * pow10).find((c) => c * view.scale >= 70) ??
+    10 * pow10;
+  const scaleBarPx = niceLen * view.scale;
+  const scaleBarLabel =
+    niceLen >= 1000 ? `${niceLen / 1000} km` : `${niceLen} m`;
 
   const flat = points.flatMap((p) => [p.x, p.y]);
   const vertexR = 5 / view.scale;
@@ -474,9 +516,13 @@ export default function GridCanvas() {
         {cursorWorld && (
           <span>
             x: {cursorWorld.x.toFixed(1)} m &nbsp; y: {cursorWorld.y.toFixed(1)} m
-            &nbsp;·&nbsp; zoom: {view.scale.toFixed(0)} px/m
+            &nbsp;·&nbsp; zoom: {view.scale >= 1 ? view.scale.toFixed(0) : view.scale.toFixed(2)} px/m
           </span>
         )}
+      </div>
+
+      <div className="scalebar" style={{ width: `${scaleBarPx}px` }}>
+        <span>{scaleBarLabel}</span>
       </div>
     </div>
   );

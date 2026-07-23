@@ -5,12 +5,16 @@
 import { create } from 'zustand';
 import { withHistory } from './historyMiddleware.js';
 import { snapToGrid, canClose } from '../geometry/polygon.js';
+import { DEFAULT_GRID_SIZE, clampToWorld } from '../config.js';
 
 const initialPolygon = {
   points: [], // [{x, y}] in metri, y-up
-  gridSize: 1.0,
+  gridSize: DEFAULT_GRID_SIZE,
   closed: false,
 };
+
+/** Snap alla griglia + clamp dentro l'area di lavoro 5000×5000 m. */
+const snapClamp = (p, gridSize) => snapToGrid(clampToWorld(p), gridSize);
 
 export const useTrackStore = create(
   withHistory(
@@ -21,7 +25,7 @@ export const useTrackStore = create(
       addPoint: (worldPoint) => {
         const { stage1Polygon } = get();
         if (stage1Polygon.closed) return;
-        const snapped = snapToGrid(worldPoint, stage1Polygon.gridSize);
+        const snapped = snapClamp(worldPoint, stage1Polygon.gridSize);
         const last = stage1Polygon.points[stage1Polygon.points.length - 1];
         // Ignora click sullo stesso punto (doppio click accidentale)
         if (last && last.x === snapped.x && last.y === snapped.y) return;
@@ -81,7 +85,9 @@ export const useTrackStore = create(
         const { stage1Polygon } = get();
         const pts = stage1Polygon.points;
         if (index < 0 || index >= pts.length) return;
-        const p = snap ? snapToGrid(worldPoint, stage1Polygon.gridSize) : worldPoint;
+        const p = snap
+          ? snapClamp(worldPoint, stage1Polygon.gridSize)
+          : clampToWorld(worldPoint);
         const next = pts.slice();
         next[index] = p;
         set({ stage1Polygon: { ...stage1Polygon, points: next } });
@@ -95,7 +101,7 @@ export const useTrackStore = create(
         const { stage1Polygon } = get();
         const pts = stage1Polygon.points;
         if (segIndex < 0 || segIndex >= pts.length) return;
-        const snapped = snapToGrid(worldPoint, stage1Polygon.gridSize);
+        const snapped = snapClamp(worldPoint, stage1Polygon.gridSize);
         const a = pts[segIndex];
         const b = pts[(segIndex + 1) % pts.length];
         // niente duplicati con gli estremi del segmento

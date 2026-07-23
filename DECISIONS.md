@@ -108,6 +108,17 @@ La tolleranza di chiusura è in **pixel schermo** (indipendente dallo zoom).
 **Motivazione**: separare disegno/editing evita ambiguità del click; il
 batching evita centinaia di undo-step per un singolo trascinamento.
 
+### D-013 — Area di lavoro 5000×5000 m, griglia default 10 m
+**Data**: 2026-07-23 (richiesta utente)
+**Decisione**: il canvas copre ±2500 m dall'origine (bordo tratteggiato
+visibile); i punti sono clampati dentro l'area. Griglia default 10 m
+(auto-ispessita ×5 quando a schermo scenderebbe sotto 8 px). Zoom
+0.08–200 px/m (al minimo l'intera area è visibile). Barra di scala stile
+cartina in basso a destra (lunghezze "tonde" 1-2-5×10ⁿ, in m o km).
+Costanti centralizzate in `frontend/src/config.js`.
+**Motivazione**: scala realistica per circuiti (km), riferimento visivo di
+distanza indipendente dallo zoom.
+
 <!-- Template nuova decisione:
 ### D-0XX — Titolo
 **Data**: YYYY-MM-DD
