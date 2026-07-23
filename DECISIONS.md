@@ -271,8 +271,15 @@ i canali variabili si reintroducono quando la pipeline regge.
 sul marker al centro di ogni stondatura → popup con angolo (±30°) e rampe
 di ritorno a zero prima/dopo (m, default 100). Bank COSTANTE lungo
 l'estensione s della curva (registrata da resampleFilletPath), rampe
-smoothstep (derivata nulla agli estremi → profilo C1). Contributi di curve
-vicine si sommano (clamp ±30). Il grafico banking è SOLA VISUALIZZAZIONE
+smoothstep (derivata nulla agli estremi → profilo C1).
+**Rampe che si intersecano → PONTE DIRETTO** (scelta utente 2026-07-23,
+sostituisce la somma iniziale): se la rampa di uscita di una curva si
+sovrappone a quella di ingresso della successiva, il bank transita
+direttamente da A° a B° con una smoothstep sull'intero gap — non torna a
+zero, mai sopra il valore più alto né sotto il più basso, sempre C1.
+Caso limite: rampe che coprono tutto il giro → bank costante ovunque.
+Gli indicatori sulla mappa fanno incontrare i tratteggi a metà gap.
+Il grafico banking è SOLA VISUALIZZAZIONE
 del profilo risultante. Sostituisce il canale a keyframe liberi (UX bocciata:
 scollegata dalle curve reali). Marker giallo + etichetta gradi = curva con
 bank. Schema: `cornerBanking{idx: {angleDeg, rampBefore, rampAfter}}`.

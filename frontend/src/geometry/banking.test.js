@@ -75,6 +75,67 @@ describe('buildBankingProfile', () => {
   });
 });
 
+describe('buildBankingProfile — PONTE tra rampe che si intersecano', () => {
+  // due curve: A [0.30-0.35] e B [0.40-0.45], gap 0.05 (250 m su 5000)
+  const two = [
+    { origIndex: 1, skip: false, sStart: 0.3, sEnd: 0.35 },
+    { origIndex: 2, skip: false, sStart: 0.4, sEnd: 0.45 },
+  ];
+
+  it('rampe sovrapposte → transizione DIRETTA A→B senza tornare a zero', () => {
+    // lo(A)=200m=0.04 + li(B)=100m=0.02 = 0.06 > gap 0.05 → ponte
+    const out = buildBankingProfile(N, LEN, two, {
+      1: { angleDeg: 12, rampBefore: 100, rampAfter: 200 },
+      2: { angleDeg: 4, rampBefore: 100, rampAfter: 100 },
+    });
+    const at = (s) => out[Math.round(s * N)];
+    expect(at(0.32)).toBeCloseTo(12, 6); // dentro A
+    expect(at(0.42)).toBeCloseTo(4, 6); // dentro B
+    expect(at(0.375)).toBeCloseTo(8, 0.5); // metà gap ≈ (12+4)/2
+    // nel gap: MAI sotto il minimo né sopra il massimo (niente gobbe)
+    for (let s = 0.351; s < 0.399; s += 0.002) {
+      expect(at(s)).toBeGreaterThanOrEqual(4 - 1e-6);
+      expect(at(s)).toBeLessThanOrEqual(12 + 1e-6);
+    }
+  });
+
+  it('rampe corte (nessuna sovrapposizione) → torna a zero tra le curve', () => {
+    const out = buildBankingProfile(N, LEN, two, {
+      1: { angleDeg: 12, rampBefore: 50, rampAfter: 50 }, // 0.01 + 0.01 < 0.05
+      2: { angleDeg: 4, rampBefore: 50, rampAfter: 50 },
+    });
+    expect(out[Math.round(0.375 * N)]).toBe(0);
+  });
+
+  it('segni opposti in ponte: crossover morbido che passa per lo zero', () => {
+    const out = buildBankingProfile(N, LEN, two, {
+      1: { angleDeg: 10, rampBefore: 100, rampAfter: 200 },
+      2: { angleDeg: -10, rampBefore: 100, rampAfter: 100 },
+    });
+    expect(out[Math.round(0.375 * N)]).toBeCloseTo(0, 0.6);
+  });
+
+  it('caso limite: rampe che coprono tutto il giro → bank costante ovunque', () => {
+    const one = [{ origIndex: 3, skip: false, sStart: 0.4, sEnd: 0.5 }];
+    const out = buildBankingProfile(N, LEN, one, {
+      3: { angleDeg: 7, rampBefore: 3000, rampAfter: 3000 },
+    });
+    expect(out.every((v) => Math.abs(v - 7) < 1e-9)).toBe(true);
+  });
+
+  it('CONTINUITÀ anche col ponte: nessun salto tra sample consecutivi', () => {
+    const out = buildBankingProfile(N, LEN, two, {
+      1: { angleDeg: 12, rampBefore: 100, rampAfter: 200 },
+      2: { angleDeg: 4, rampBefore: 100, rampAfter: 100 },
+    });
+    // pendenza massima teorica: rampa 12° su 100 m → smoothstep max 1.5·12/0.02
+    // = 900°/unità-s → 0.9°/sample. Un vero salto (discontinuità) sarebbe ≥ 4°.
+    for (let i = 0; i < N; i++) {
+      expect(Math.abs(out[(i + 1) % N] - out[i])).toBeLessThan(1.0);
+    }
+  });
+});
+
 describe('bankingIndicators', () => {
   // curva a SINISTRA (stile quadrato ccw): d1 verso il prev = (-1,0),
   // d2 verso il next = (0,1) → esterno curva a destra (-1)
@@ -108,5 +169,18 @@ describe('bankingIndicators', () => {
 
   it('curve senza bank: nessun indicatore', () => {
     expect(bankingIndicators([leftTurn], {}, 5000)).toEqual([]);
+  });
+
+  it('rampe in ponte: i tratteggi si incontrano a metà gap', () => {
+    const A = { origIndex: 1, skip: false, sStart: 0.3, sEnd: 0.35, d1: { x: -1, y: 0 }, d2: { x: 0, y: 1 } };
+    const B = { origIndex: 2, skip: false, sStart: 0.4, sEnd: 0.45, d1: { x: 0, y: -1 }, d2: { x: 1, y: 0 } };
+    const out = bankingIndicators([A, B], {
+      1: { angleDeg: 12, rampBefore: 100, rampAfter: 200 },
+      2: { angleDeg: 4, rampBefore: 100, rampAfter: 100 },
+    }, 5000);
+    const iA = out.find((i) => i.origIndex === 1);
+    const iB = out.find((i) => i.origIndex === 2);
+    expect(iA.sRampOutEnd).toBeCloseTo(0.375, 9); // metà del gap [0.35, 0.40]
+    expect(iB.sRampInStart).toBeCloseTo(0.375, 9);
   });
 });
