@@ -35,9 +35,9 @@ const smoothstep = (e0, e1, x) => {
 
 export const DEFAULT_NOISE_PARAMS = {
   seed: 12345,
-  amplitude: 25, // escursione verticale (m) prima del limite di pendenza
-  wavelength: 800, // lunghezza d'onda base lungo il tracciato (m)
-  octaves: 4,
+  amplitude: 50, // escursione verticale (m) prima del limite di pendenza
+  wavelength: 2500, // lunghezza d'onda base lungo il tracciato (m)
+  octaves: 2,
   persistence: 0.5,
   lacunarity: 2.0,
   maxSlopePct: 10, // pendenza longitudinale massima (%) — F1 ~10%

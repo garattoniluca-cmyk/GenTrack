@@ -56,9 +56,9 @@ const initialFlowTube = {
   // altimetria: parametri del rumore periodico (D-022) — z(s) è derivato puro
   elevationNoise: {
     seed: 12345,
-    amplitude: 25,
-    wavelength: 800,
-    octaves: 4,
+    amplitude: 50,
+    wavelength: 2500,
+    octaves: 2,
     persistence: 0.5,
     lacunarity: 2.0,
     maxSlopePct: 10,
